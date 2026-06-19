@@ -6,6 +6,15 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      "env": {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBrw_kGtwO2nZc8X-wgU8_j-RaYrxKhgoA",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "minegocio-8bbef.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "minegocio-8bbef",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "minegocio-8bbef.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "40076356712",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:40076356712:android:4c95b50735a6f536e15fdd"
+      },
       "android": {
         "buildType": "apk"
       }
