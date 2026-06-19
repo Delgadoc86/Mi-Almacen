@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "40076356712",
+    "project_id": "minegocio-8bbef",
+    "storage_bucket": "minegocio-8bbef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:40076356712:android:4c95b50735a6f536e15fdd",
+        "android_client_info": {
+          "package_name": "com.delgadodev.mialmacen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrw_kGtwO2nZc8X-wgU8_j-RaYrxKhgoA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
