@@ -30,6 +30,7 @@ su catálogo de productos, los fiados de clientes y su lista de precios.
 | PDF | expo-print + expo-sharing |
 | Persistencia local | @react-native-async-storage |
 | UI | React Native StyleSheet (sin librerías de UI externas) |
+| Build | EAS Build (expo-constants) |
 
 ---
 
@@ -121,6 +122,7 @@ MiNegocio/
 │   ├── models/              # Tipos TypeScript (Product, Customer, etc.)
 │   ├── services/            # Acceso a Firebase (products, customers…)
 │   ├── theme/               # Paleta de colores y espaciado
+│   ├── types/               # Declaraciones de tipos globales (env.d.ts)
 │   ├── utils/               # Cálculo de precios, template PDF
 │   └── constants/           # Categorías por defecto, colecciones Firestore
 ├── assets/                  # Íconos y splash
@@ -144,6 +146,25 @@ npm run ios        # Inicia apuntando a iOS
 
 ---
 
+## Build para distribución (EAS)
+
+Requiere `eas-cli` instalado y sesión activa en Expo:
+
+```bash
+npm install -g eas-cli
+eas login
+```
+
+### Generar APK (distribución interna)
+
+```bash
+eas build --profile preview --platform android
+```
+
+El APK resultante se descarga desde el dashboard de EAS y se instala directamente en el dispositivo (no requiere Play Store).
+
+---
+
 ## Consideraciones de seguridad
 
 - El archivo `.env` **no debe subirse al repositorio**. Está incluido en `.gitignore`.
@@ -154,7 +175,6 @@ npm run ios        # Inicia apuntando a iOS
 
 ## Limitaciones conocidas
 
-- El error `getReactNativePersistence not exported` aparece solo en `tsc --noEmit` (tipado en entorno Node.js). En Metro/Expo Go funciona correctamente.
 - La generación de PDF requiere entorno nativo; no funciona en la versión web.
 
 ---
