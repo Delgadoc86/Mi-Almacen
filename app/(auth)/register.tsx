@@ -1,125 +1,325 @@
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
-import { Link } from 'expo-router';
+import { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
 
+const ERROR_MAP: Record<string, string> = {
+  'auth/email-already-in-use': 'Ya existe una cuenta con ese email.',
+  'auth/invalid-email': 'Email inválido.',
+  'auth/weak-password': 'La contraseña es muy débil. Usá al menos 6 caracteres.',
+  'auth/network-request-failed': 'Sin conexión. Verificá tu internet.',
+  'auth/operation-not-allowed': 'El registro está deshabilitado momentáneamente.',
+};
+
+function mapAuthError(err: unknown): string {
+  const code = (err as { code?: string })?.code ?? '';
+  return ERROR_MAP[code] ?? 'Ocurrió un error al crear la cuenta. Intentá de nuevo.';
+}
+
 export default function RegisterScreen() {
+  const router = useRouter();
   const { register } = useAuth();
+
   const [businessName, setBusinessName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [generalError, setGeneralError] = useState('');
+
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   async function handleRegister() {
     if (!businessName.trim() || !email.trim() || !password) {
-      Alert.alert('Campos requeridos', 'Completá todos los campos.');
+      setGeneralError('Completá todos los campos.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Contraseña corta', 'La contraseña debe tener al menos 6 caracteres.');
+      setGeneralError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
+    setGeneralError('');
     setLoading(true);
     try {
-      await register(email.trim(), password, businessName.trim());
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error desconocido';
-      Alert.alert('Error al registrarse', msg);
+      await register(email.trim().toLowerCase(), password, businessName.trim());
+      // RootGuard detects emailVerified === false and redirects to /verify-email
+    } catch (e) {
+      setGeneralError(mapAuthError(e));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Mi Almacén</Text>
-      <Text style={styles.subtitle}>Creá tu cuenta de comercio</Text>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── BRANDING ── */}
+        <View style={styles.brandSection}>
+          <View style={styles.logoWrap}>
+            <Ionicons name="storefront" size={30} color={theme.colors.primary} />
+          </View>
+          <Text style={styles.title}>Crear cuenta</Text>
+          <Text style={styles.subtitle}>Tu comercio listo en un minuto</Text>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Nombre del comercio"
-        placeholderTextColor={theme.colors.muted}
-        value={businessName}
-        onChangeText={setBusinessName}
-        autoCapitalize="words"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor={theme.colors.muted}
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña (mín. 6 caracteres)"
-        placeholderTextColor={theme.colors.muted}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
+        {/* ── FORM ── */}
+        <View style={styles.form}>
+          <Text style={styles.fieldLabel}>Nombre del comercio</Text>
+          <TextInput
+            style={styles.input}
+            value={businessName}
+            onChangeText={(t) => { setBusinessName(t); setGeneralError(''); }}
+            placeholder="Ej: Almacén Don Pepe"
+            placeholderTextColor={theme.colors.muted}
+            autoCapitalize="words"
+            returnKeyType="next"
+            onSubmitEditing={() => emailRef.current?.focus()}
+          />
 
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? 'Creando cuenta...' : 'Crear cuenta'}</Text>
-      </TouchableOpacity>
+          <Text style={styles.fieldLabel}>Email</Text>
+          <TextInput
+            ref={emailRef}
+            style={styles.input}
+            value={email}
+            onChangeText={(t) => { setEmail(t); setGeneralError(''); }}
+            placeholder="tucorreo@ejemplo.com"
+            placeholderTextColor={theme.colors.muted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+          />
 
-      <Link href="/login" style={styles.link}>
-        ¿Ya tenés cuenta? Iniciá sesión
-      </Link>
-    </ScrollView>
+          <Text style={styles.fieldLabel}>Contraseña</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              ref={passwordRef}
+              style={styles.inputInner}
+              value={password}
+              onChangeText={(t) => { setPassword(t); setGeneralError(''); }}
+              placeholder="Mínimo 6 caracteres"
+              placeholderTextColor={theme.colors.muted}
+              secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleRegister}
+            />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPassword((p) => !p)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.muted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {generalError ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
+              <Text style={styles.errorText}>{generalError}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.verificationHint}>
+            <Ionicons name="mail-outline" size={14} color={theme.colors.muted} />
+            <Text style={styles.verificationHintText}>
+              Te enviaremos un correo para activar tu cuenta.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, loading && styles.btnDisabled]}
+            onPress={handleRegister}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.primaryBtnText}>Crear cuenta</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* ── FOOTER ── */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>¿Ya tenés cuenta? </Text>
+          <TouchableOpacity onPress={() => router.push('/login')}>
+            <Text style={styles.footerLink}>Iniciá sesión</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: theme.colors.background },
   container: {
     flexGrow: 1,
-    backgroundColor: theme.colors.background,
-    paddingHorizontal: theme.spacing.large,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
     justifyContent: 'center',
-    paddingVertical: 48,
+  },
+  brandSection: {
+    alignItems: 'center',
+    marginBottom: 36,
+  },
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 3,
   },
   title: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: theme.colors.primary,
-    marginBottom: 8,
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 17,
+    fontSize: 15,
+    color: theme.colors.muted,
+    fontWeight: '500',
+  },
+  form: { width: '100%' },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
     color: theme.colors.textSecondary,
-    marginBottom: 36,
+    marginBottom: 7,
+    letterSpacing: 0.2,
   },
   input: {
     backgroundColor: theme.colors.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
-    borderRadius: 10,
-    paddingHorizontal: theme.spacing.medium,
+    borderRadius: 14,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
     color: theme.colors.text,
-    marginBottom: theme.spacing.medium,
+    marginBottom: 16,
   },
-  button: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 10,
-    paddingVertical: 16,
+  inputWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    marginBottom: 16,
   },
-  buttonText: {
-    color: '#fff',
+  inputInner: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
-    fontWeight: '600',
+    color: theme.colors.text,
   },
-  link: {
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+    backgroundColor: theme.colors.dangerLight,
+    borderWidth: 1,
+    borderColor: theme.colors.dangerMid,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.colors.error,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  verificationHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  verificationHintText: {
+    fontSize: 12,
+    color: theme.colors.muted,
+    fontWeight: '500',
+  },
+  primaryBtn: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 16,
+    paddingVertical: 17,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+    minHeight: 54,
+    justifyContent: 'center',
+  },
+  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
+  primaryBtnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 28,
-    textAlign: 'center',
-    color: theme.colors.primary,
+  },
+  footerText: {
     fontSize: 15,
+    color: theme.colors.muted,
+    fontWeight: '500',
+  },
+  footerLink: {
+    fontSize: 15,
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
 });

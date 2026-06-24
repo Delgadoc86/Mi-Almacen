@@ -11,6 +11,8 @@ export const FIRESTORE_COLLECTIONS = {
   CATEGORIES: 'categories',
   CUSTOMERS: 'customers',
   MOVEMENTS: 'movements',
+  CASH_SESSIONS: 'cashSessions',
+  CASH_MOVEMENTS: 'cashMovements',
 } as const;
 
 export const DEFAULT_CATEGORIES = [

@@ -2,6 +2,9 @@ import {
   collection,
   doc,
   addDoc,
+  updateDoc,
+  deleteDoc,
+  deleteField,
   runTransaction,
   onSnapshot,
   serverTimestamp,
@@ -12,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { FIRESTORE_COLLECTIONS } from '@/constants';
-import type { Customer, Movement, MovementType } from '@/models';
+import type { Customer, Movement, MovementType, PaymentMethod } from '@/models';
 
 function customersRef(businessId: string) {
   return collection(
@@ -75,16 +78,44 @@ export function subscribeToCustomer(
 
 export async function createCustomer(
   businessId: string,
-  data: { name: string; phone?: string },
+  data: { name: string; phone?: string; reference?: string },
 ): Promise<string> {
-  const ref = await addDoc(customersRef(businessId), {
+  try {
+    const ref = await addDoc(customersRef(businessId), {
+      name: data.name,
+      ...(data.phone ? { phone: data.phone } : {}),
+      ...(data.reference ? { reference: data.reference } : {}),
+      balance: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return ref.id;
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code ?? '(sin código)';
+    const message = (err as { message?: string })?.message ?? '(sin mensaje)';
+    console.error('[createCustomer] FIRESTORE ERROR →', { code, message });
+    throw err;
+  }
+}
+
+export async function updateCustomer(
+  businessId: string,
+  customerId: string,
+  data: { name: string; phone?: string; reference?: string },
+): Promise<void> {
+  await updateDoc(customerDocRef(businessId, customerId), {
     name: data.name,
-    ...(data.phone ? { phone: data.phone } : {}),
-    balance: 0,
-    createdAt: serverTimestamp(),
+    phone: data.phone?.trim() || deleteField(),
+    reference: data.reference?.trim() || deleteField(),
     updatedAt: serverTimestamp(),
   });
-  return ref.id;
+}
+
+export async function deleteCustomer(
+  businessId: string,
+  customerId: string,
+): Promise<void> {
+  await deleteDoc(customerDocRef(businessId, customerId));
 }
 
 export function subscribeToMovements(
@@ -111,6 +142,7 @@ export async function registerMovement(
   type: MovementType,
   amount: number,
   description?: string,
+  paymentMethod?: PaymentMethod,
 ): Promise<void> {
   const customerRef = customerDocRef(businessId, customerId);
   // Generate new movement ID outside transaction (safe — only creates a reference)
@@ -137,7 +169,8 @@ export async function registerMovement(
     tx.set(movRef, {
       type,
       amount,
-      description: description ?? null,
+      ...(description ? { description } : {}),
+      ...(type === 'pago' && paymentMethod ? { paymentMethod } : {}),
       balanceAfter: newBalance,
       createdAt: serverTimestamp(),
     });

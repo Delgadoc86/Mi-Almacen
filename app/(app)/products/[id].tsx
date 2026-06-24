@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { deleteField } from 'firebase/firestore';
 import type { UpdateData } from 'firebase/firestore';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
 import { getProduct, updateProduct, deleteProduct } from '@/services/products';
@@ -21,9 +24,9 @@ import { theme } from '@/theme';
 import type { Product, ProductType, RoundTo } from '@/models';
 
 const TYPE_OPTIONS: { label: string; value: ProductType }[] = [
-  { label: 'Unidad', value: 'unidad' },
-  { label: 'Pack', value: 'pack' },
-  { label: 'Peso', value: 'peso' },
+  { label: 'Por unidad', value: 'unidad' },
+  { label: 'Por caja / pack', value: 'pack' },
+  { label: 'Por peso', value: 'peso' },
 ];
 
 export default function EditProductScreen() {
@@ -45,6 +48,9 @@ export default function EditProductScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Price protection
+  const [keepCurrentPrice, setKeepCurrentPrice] = useState(true);
+
   useEffect(() => {
     if (!userProfile?.businessId || !id) return;
     getProduct(userProfile.businessId, id)
@@ -64,6 +70,11 @@ export default function EditProductScreen() {
     setUnitsPerPack(product.unitsPerPack ? String(product.unitsPerPack) : '');
   }, [product]);
 
+  // Reset price choice whenever the condition changes
+  useEffect(() => {
+    setKeepCurrentPrice(true);
+  }, [cost, margin, roundTo, type, unitsPerPack]);
+
   const costNum = parseFloat(cost) || 0;
   const marginNum = parseFloat(margin) || 0;
   const unitsNum = parseInt(unitsPerPack, 10) || 0;
@@ -74,6 +85,9 @@ export default function EditProductScreen() {
     type,
     type === 'pack' ? unitsNum : undefined,
   );
+
+  // Price protection: warn when new calculated price < current saved price
+  const priceLower = costNum > 0 && product !== null && price < product.price;
 
   async function handleSave() {
     if (!name.trim()) {
@@ -98,6 +112,9 @@ export default function EditProductScreen() {
     }
     if (!userProfile?.businessId || !id) return;
 
+    // Apply price protection decision
+    const finalPrice = priceLower && keepCurrentPrice ? product!.price : price;
+
     const updateData: UpdateData<Product> = {
       name: name.trim(),
       type,
@@ -105,17 +122,15 @@ export default function EditProductScreen() {
       cost: costNum,
       margin: marginNum,
       roundTo,
-      price,
+      price: finalPrice,
     };
 
-    // Pack field: set if pack, delete otherwise
     if (type === 'pack' && unitsNum > 0) {
       updateData.unitsPerPack = unitsNum;
     } else {
       updateData.unitsPerPack = deleteField();
     }
 
-    // Peso fields: delete if switching away from peso
     if (type !== 'peso') {
       updateData.unit = deleteField();
       updateData.saleUnitLabel = deleteField();
@@ -175,147 +190,194 @@ export default function EditProductScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Text style={styles.label}>Nombre *</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="Ej: Aceite Natura 1 lt"
-        placeholderTextColor={theme.colors.muted}
-        maxLength={80}
-        autoCapitalize="sentences"
-      />
-
-      <Text style={styles.label}>Tipo *</Text>
-      <View style={styles.row}>
-        {TYPE_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.value}
-            style={[styles.toggleBtn, type === opt.value && styles.toggleBtnActive]}
-            onPress={() => setType(opt.value)}
-          >
-            <Text style={[styles.toggleText, type === opt.value && styles.toggleTextActive]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Categoría *</Text>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[styles.chip, categoryId === cat.id && styles.chipActive]}
-            onPress={() => setCategoryId(cat.id)}
-          >
-            <Text style={[styles.chipText, categoryId === cat.id && styles.chipTextActive]}>
-              {cat.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        <Text style={styles.fieldLabel}>Nombre *</Text>
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="Ej: Aceite Natura 1 lt"
+          placeholderTextColor={theme.colors.muted}
+          maxLength={80}
+          autoCapitalize="sentences"
+          returnKeyType="next"
+        />
 
-      <Text style={styles.label}>Costo (ARS) *</Text>
-      <TextInput
-        style={styles.input}
-        value={cost}
-        onChangeText={setCost}
-        keyboardType="decimal-pad"
-        placeholder="0.00"
-        placeholderTextColor={theme.colors.muted}
-      />
-
-      {type === 'pack' && (
-        <>
-          <Text style={styles.label}>Unidades por pack *</Text>
-          <TextInput
-            style={styles.input}
-            value={unitsPerPack}
-            onChangeText={setUnitsPerPack}
-            keyboardType="number-pad"
-            placeholder="Ej: 12"
-            placeholderTextColor={theme.colors.muted}
-          />
-        </>
-      )}
-
-      <Text style={styles.label}>Margen de ganancia (%)</Text>
-      <TextInput
-        style={styles.input}
-        value={margin}
-        onChangeText={setMargin}
-        keyboardType="decimal-pad"
-        placeholder="0"
-        placeholderTextColor={theme.colors.muted}
-      />
-
-      <Text style={styles.label}>Redondeo *</Text>
-      <View style={styles.row}>
-        {ROUND_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.value}
-            style={[styles.toggleBtn, roundTo === opt.value && styles.toggleBtnActive]}
-            onPress={() => setRoundTo(opt.value)}
-          >
-            <Text style={[styles.toggleText, roundTo === opt.value && styles.toggleTextActive]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {costNum > 0 && (
-        <View style={styles.preview}>
-          <Text style={styles.previewLabel}>Precio de venta calculado</Text>
-          <Text style={styles.previewPrice}>${price.toLocaleString('es-AR')}</Text>
-          {type === 'pack' && unitsNum > 0 && (
-            <Text style={styles.previewSub}>
-              Costo unitario: ${(costNum / unitsNum).toFixed(2)}
-            </Text>
-          )}
+        <Text style={styles.fieldLabel}>Tipo *</Text>
+        <View style={styles.chipRow}>
+          {TYPE_OPTIONS.map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.chip, type === opt.value && styles.chipActive]}
+              onPress={() => setType(opt.value)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chipText, type === opt.value && styles.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      )}
 
-      <TouchableOpacity
-        style={[styles.saveBtn, (saving || deleting) && styles.saveBtnDisabled]}
-        onPress={handleSave}
-        disabled={saving || deleting}
-        activeOpacity={0.8}
-      >
-        {saving ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.saveBtnText}>Guardar cambios</Text>
-        )}
-      </TouchableOpacity>
+        <Text style={styles.fieldLabel}>Categoría *</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRowScroll}
+        >
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.chip, categoryId === cat.id && styles.chipActive]}
+              onPress={() => setCategoryId(cat.id)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chipText, categoryId === cat.id && styles.chipTextActive]}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.deleteBtn, (saving || deleting) && styles.saveBtnDisabled]}
-        onPress={confirmDelete}
-        disabled={saving || deleting}
-        activeOpacity={0.8}
-      >
-        {deleting ? (
-          <ActivityIndicator color={theme.colors.error} />
-        ) : (
-          <Text style={styles.deleteBtnText}>Eliminar producto</Text>
+        <Text style={styles.fieldLabel}>Costo (ARS) *</Text>
+        <TextInput
+          style={styles.input}
+          value={cost}
+          onChangeText={setCost}
+          keyboardType="decimal-pad"
+          placeholder="0.00"
+          placeholderTextColor={theme.colors.muted}
+        />
+
+        {type === 'pack' && (
+          <>
+            <Text style={styles.fieldLabel}>Unidades por caja / pack *</Text>
+            <TextInput
+              style={styles.input}
+              value={unitsPerPack}
+              onChangeText={setUnitsPerPack}
+              keyboardType="number-pad"
+              placeholder="Ej: 12"
+              placeholderTextColor={theme.colors.muted}
+            />
+          </>
         )}
-      </TouchableOpacity>
-    </ScrollView>
+
+        <Text style={styles.fieldLabel}>Margen de ganancia (%)</Text>
+        <TextInput
+          style={styles.input}
+          value={margin}
+          onChangeText={setMargin}
+          keyboardType="decimal-pad"
+          placeholder="0"
+          placeholderTextColor={theme.colors.muted}
+        />
+
+        <Text style={styles.fieldLabel}>Redondeo del precio final *</Text>
+        <Text style={styles.fieldHint}>El precio calculado se redondeará al valor elegido.</Text>
+        <View style={styles.chipRow}>
+          {ROUND_OPTIONS.map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.chip, roundTo === opt.value && styles.chipActive]}
+              onPress={() => setRoundTo(opt.value)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chipText, roundTo === opt.value && styles.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── PRICE PREVIEW ── */}
+        {costNum > 0 && (
+          <View style={styles.preview}>
+            <Text style={styles.previewLabel}>Precio de venta calculado</Text>
+            <Text style={styles.previewPrice}>${price.toLocaleString('es-AR')}</Text>
+            {type === 'pack' && unitsNum > 0 && (
+              <Text style={styles.previewSub}>
+                Costo unitario: ${(costNum / unitsNum).toFixed(2)}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* ── PRICE PROTECTION WARNING ── */}
+        {priceLower && (
+          <View style={styles.priceLowerCard}>
+            <View style={styles.priceLowerHeader}>
+              <Ionicons name="warning-outline" size={16} color="#92400E" />
+              <Text style={styles.priceLowerTitle}>El precio calculado es menor al precio actual</Text>
+            </View>
+            <Text style={styles.priceLowerValues}>
+              Precio actual: ${product.price.toLocaleString('es-AR')}{'  →  '}
+              Calculado: ${price.toLocaleString('es-AR')}
+            </Text>
+            <View style={styles.priceChoiceRow}>
+              <TouchableOpacity
+                style={[styles.priceChoiceBtn, keepCurrentPrice && styles.priceChoiceBtnActive]}
+                onPress={() => setKeepCurrentPrice(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.priceChoiceBtnText, keepCurrentPrice && styles.priceChoiceBtnTextActive]}>
+                  Mantener ${product.price.toLocaleString('es-AR')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.priceChoiceBtn, !keepCurrentPrice && styles.priceChoiceBtnActive]}
+                onPress={() => setKeepCurrentPrice(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.priceChoiceBtnText, !keepCurrentPrice && styles.priceChoiceBtnTextActive]}>
+                  Usar ${price.toLocaleString('es-AR')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.saveBtn, (saving || deleting) && styles.btnDisabled]}
+          onPress={handleSave}
+          disabled={saving || deleting}
+          activeOpacity={0.85}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.saveBtnText}>Guardar cambios</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.deleteBtn, (saving || deleting) && styles.btnDisabled]}
+          onPress={confirmDelete}
+          disabled={saving || deleting}
+          activeOpacity={0.85}
+        >
+          {deleting ? (
+            <ActivityIndicator color={theme.colors.error} size="small" />
+          ) : (
+            <Text style={styles.deleteBtnText}>Eliminar producto</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: theme.colors.background },
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -326,67 +388,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textSecondary,
   },
-  scroll: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 48,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 6,
-    marginTop: 16,
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    marginBottom: 7,
+    letterSpacing: 0.2,
+  },
+  fieldHint: {
+    fontSize: 11,
+    color: theme.colors.muted,
+    fontWeight: '500',
+    marginTop: -4,
+    marginBottom: 10,
   },
   input: {
     backgroundColor: theme.colors.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
     color: theme.colors.text,
+    marginBottom: 16,
   },
-  row: {
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginBottom: 16,
   },
-  toggleBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-  },
-  toggleBtnActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  toggleText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    fontWeight: '500',
-  },
-  toggleTextActive: {
-    color: '#fff',
-  },
-  chips: {
+  chipRowScroll: {
     flexDirection: 'row',
     gap: 8,
     paddingBottom: 4,
+    marginBottom: 12,
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
+    height: 38,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chipActive: {
     backgroundColor: theme.colors.primary,
@@ -395,61 +447,132 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   chipTextActive: {
     color: '#fff',
+    fontWeight: '700',
   },
   preview: {
-    marginTop: 20,
+    marginBottom: 16,
     backgroundColor: theme.colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primaryMid,
   },
   previewLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: theme.colors.textSecondary,
+    fontWeight: '600',
     marginBottom: 4,
+    letterSpacing: 0.3,
   },
   previewPrice: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
     color: theme.colors.primary,
+    letterSpacing: -1,
   },
   previewSub: {
     fontSize: 13,
     color: theme.colors.muted,
     marginTop: 4,
+    fontWeight: '500',
   },
-  saveBtn: {
-    marginTop: 28,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
+
+  // Price protection
+  priceLowerCard: {
+    backgroundColor: theme.colors.warningLight,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  priceLowerHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 7,
+    marginBottom: 6,
   },
-  saveBtnDisabled: {
-    opacity: 0.6,
+  priceLowerTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  priceLowerValues: {
+    fontSize: 13,
+    color: '#92400E',
+    fontWeight: '500',
+    marginBottom: 12,
+    lineHeight: 19,
+  },
+  priceChoiceRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priceChoiceBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  priceChoiceBtnActive: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
+  },
+  priceChoiceBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+    textAlign: 'center',
+  },
+  priceChoiceBtnTextActive: {
+    color: '#fff',
+  },
+
+  // Buttons
+  saveBtn: {
+    marginTop: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 16,
+    paddingVertical: 17,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+    minHeight: 54,
+    justifyContent: 'center',
   },
   saveBtnText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
   },
+  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
   deleteBtn: {
-    marginTop: 12,
-    borderRadius: 12,
+    borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: theme.colors.error,
+    borderColor: theme.colors.dangerMid,
+    backgroundColor: theme.colors.dangerLight,
+    minHeight: 54,
+    justifyContent: 'center',
   },
   deleteBtnText: {
     color: theme.colors.error,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

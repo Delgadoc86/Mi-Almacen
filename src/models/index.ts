@@ -3,6 +3,7 @@ import { Timestamp } from 'firebase/firestore';
 export type ProductType = 'unidad' | 'pack' | 'peso';
 export type RoundTo = 1 | 5 | 10 | 50 | 100;
 export type MovementType = 'fiado' | 'pago';
+export type PaymentMethod = 'efectivo' | 'transferencia' | 'mercado_pago' | 'otro';
 
 export type Category = {
   id: string;
@@ -36,6 +37,7 @@ export type Customer = {
   id: string;
   name: string;
   phone?: string;
+  reference?: string;
   balance: number; // positive = owes money, 0 = settled, never negative
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -46,9 +48,44 @@ export type Movement = {
   type: MovementType;
   amount: number; // always positive
   description?: string;
+  paymentMethod?: PaymentMethod;
   balanceAfter: number; // customer balance after this movement
   createdAt: Timestamp;
 };
+
+// ── Caja Diaria ──────────────────────────────────────────
+
+export type CashSessionStatus = 'open' | 'closed';
+export type CashMovementType = 'ingreso' | 'egreso';
+
+export type CashSession = {
+  id: string;
+  date: string; // "YYYY-MM-DD"
+  openingBalance: number;
+  status: CashSessionStatus;
+  summary: {
+    totalIngresos: number;
+    totalEgresos: number;
+    efectivo: number;
+    mercadoPago: number;
+    transferencia: number;
+    otro: number;
+    movementsCount: number;
+  };
+  closedAt?: Timestamp;
+  createdAt: Timestamp;
+};
+
+export type CashMovement = {
+  id: string;
+  type: CashMovementType;
+  amount: number;
+  medioPago?: PaymentMethod;
+  description?: string;
+  createdAt: Timestamp;
+};
+
+// ─────────────────────────────────────────────────────────
 
 export type Plan = 'free' | 'pro';
 
@@ -59,6 +96,7 @@ export type UserProfile = {
   businessId: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  lastLoginAt?: Timestamp;
 };
 
 export type Business = {

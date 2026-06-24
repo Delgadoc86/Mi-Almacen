@@ -1,6 +1,14 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { initializeAuth, getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// getReactNativePersistence lives in the RN bundle of firebase/auth (resolved by Metro)
+// but is absent from the Node bundle's TypeScript declarations. Use require() to bypass.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { getReactNativePersistence } = require('firebase/auth') as {
+  getReactNativePersistence: (storage: typeof AsyncStorage) => unknown;
+};
 
 const REQUIRED_VARS = [
   'EXPO_PUBLIC_FIREBASE_API_KEY',
@@ -31,7 +39,18 @@ let db: Firestore;
 
 try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  auth = getAuth(app);
+
+  // initializeAuth with AsyncStorage persistence so the session survives app restarts.
+  // Falls back to getAuth on hot-reload (auth already initialized on same app instance).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage) as any,
+    });
+  } catch {
+    auth = getAuth(app);
+  }
+
   db = getFirestore(app);
 } catch (e) {
   console.warn('[Firebase] Error al inicializar Firebase:', e);

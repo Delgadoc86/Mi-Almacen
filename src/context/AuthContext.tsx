@@ -1,18 +1,25 @@
 import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { type User as FirebaseUser } from 'firebase/auth';
+import * as SecureStore from 'expo-secure-store';
 import {
   subscribeToAuthChanges,
   registerWithEmail,
   loginWithEmail,
   logout as authLogout,
+  sendPasswordReset,
+  reloadUser,
 } from '@/services/auth';
 import {
   createUserAndBusiness,
   getUserProfile,
   getBusiness,
   repairIncompleteRegistration,
+  updateLastLogin,
 } from '@/services/userProfile';
+import { auth } from '@/services/firebase';
 import type { UserProfile, Business } from '@/models';
+
+const BIOMETRIC_EMAIL_KEY = 'biometric_user_email';
 
 type AuthState = {
   firebaseUser: FirebaseUser | null;
@@ -26,6 +33,10 @@ type AuthContextType = AuthState & {
   register: (email: string, password: string, businessName: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshBusiness: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  recheckEmailVerified: () => Promise<boolean>;
+  refreshSession: () => Promise<boolean>;
+  resendVerificationEmail: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -63,8 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string): Promise<void> {
     const fbUser = await loginWithEmail(email, password);
-    // Repair incomplete registration if Firestore docs are missing
     await repairIncompleteRegistration(fbUser.uid, fbUser.email ?? email);
+    // Non-critical: update lastLoginAt and save email for biometric future use
+    Promise.all([
+      updateLastLogin(fbUser.uid),
+      SecureStore.setItemAsync(BIOMETRIC_EMAIL_KEY, email),
+    ]).catch(() => {});
     // onAuthStateChanged handles state update
   }
 
@@ -91,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout(): Promise<void> {
     await authLogout();
+    await SecureStore.deleteItemAsync(BIOMETRIC_EMAIL_KEY).catch(() => {});
     // onAuthStateChanged fires and clears state
   }
 
@@ -100,8 +116,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, business: biz }));
   }
 
+  async function forgotPassword(email: string): Promise<void> {
+    await sendPasswordReset(email);
+  }
+
+  async function recheckEmailVerified(): Promise<boolean> {
+    const freshUser = await reloadUser();
+    if (!freshUser?.emailVerified) return false;
+    setState((prev) => ({ ...prev, firebaseUser: freshUser }));
+    return true;
+  }
+
+  // Used by biometric login: confirms session is still active without re-entering credentials
+  async function refreshSession(): Promise<boolean> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
+    const [profile, biz] = await Promise.all([
+      getUserProfile(currentUser.uid),
+      getBusiness(currentUser.uid),
+    ]);
+    setState({ firebaseUser: currentUser, userProfile: profile, business: biz, loading: false });
+    return true;
+  }
+
+  async function resendVerificationEmail(): Promise<void> {
+    if (!auth.currentUser) throw new Error('No hay sesión activa.');
+    const { sendEmailVerification } = await import('firebase/auth');
+    await sendEmailVerification(auth.currentUser);
+  }
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, refreshBusiness }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        register,
+        logout,
+        refreshBusiness,
+        forgotPassword,
+        recheckEmailVerified,
+        refreshSession,
+        resendVerificationEmail,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

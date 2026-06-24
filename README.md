@@ -1,16 +1,17 @@
 # Mi Almacén
 
-Aplicación móvil de gestión para almacenes, kioscos y despensas.
+Aplicación móvil de gestión para almacenes, kioscos, verdulerías y despensas.
 Diseñada para propietarios de pequeños comercios que necesitan controlar
-su catálogo de productos, los fiados de clientes y su lista de precios.
+su caja diaria, los fiados de clientes y su catálogo de productos.
 
 ---
 
 ## Características principales
 
-- **Dashboard** — resumen de deuda total, clientes que deben y estado del catálogo
-- **Productos** — alta, edición y eliminación con precio de venta automático (costo + margen + redondeo)
+- **Caja Diaria** — apertura, registro de ingresos (efectivo / Mercado Pago / transferencia / otro), registro de gastos con descripción obligatoria, cierre con resumen y efectivo en cajón. Historial de movimientos del día.
+- **Dashboard** — saldo actual de caja, deuda total de fiados y estado del catálogo en tiempo real
 - **Fiados** — registro de créditos y cobros por cliente, historial de movimientos
+- **Productos** — alta, edición y eliminación con precio de venta automático (costo + margen + redondeo)
 - **Lista de precios PDF** — generación y compartición del catálogo agrupado por categoría
 - **Categorías** — 9 categorías del sistema + categorías personalizadas
 - **Configuración** — nombre del comercio, margen por defecto, redondeo por defecto, categoría por defecto
@@ -87,15 +88,45 @@ Escanear el código QR con Expo Go desde el dispositivo móvil.
 
 ## Reglas de Firestore recomendadas
 
-```
+```js
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    match /businesses/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    match /businesses/{businessId} {
+      allow read, create, update: if request.auth != null && request.auth.uid == businessId;
+
+      match /products/{productId} {
+        allow read, create, update, delete: if request.auth != null && request.auth.uid == businessId;
+      }
+
+      match /categories/{categoryId} {
+        allow read, create, update, delete: if request.auth != null && request.auth.uid == businessId;
+      }
+
+      match /customers/{customerId} {
+        allow read, create, update: if request.auth != null && request.auth.uid == businessId;
+
+        match /movements/{movementId} {
+          allow read, create: if request.auth != null && request.auth.uid == businessId;
+        }
+      }
+
+      match /cashSessions/{sessionId} {
+        allow read, create, update: if request.auth != null && request.auth.uid == businessId;
+
+        match /cashMovements/{movementId} {
+          allow read, create: if request.auth != null && request.auth.uid == businessId;
+        }
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
@@ -110,7 +141,8 @@ MiNegocio/
 ├── app/
 │   ├── (auth)/              # Pantallas de login y registro
 │   ├── (app)/
-│   │   ├── (tabs)/          # Tabs: Inicio, Productos, Fiados, PDF, Config
+│   │   ├── (tabs)/          # Tabs: Inicio, Caja, Fiados, Productos, Precios, Config
+│   │   ├── cash/            # Caja Diaria: ingreso, gasto, cierre, movimientos
 │   │   ├── products/        # Alta y edición de producto
 │   │   ├── customers/       # Alta y detalle de cliente
 │   │   └── categories/      # Gestión de categorías

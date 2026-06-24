@@ -3,7 +3,7 @@ import { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'Mi Almacén',
   slug: 'mi-almacen',
-  version: '1.0.0',
+  version: '1.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'mialmacen',
@@ -15,10 +15,13 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: true,
+    infoPlist: {
+      NSFaceIDUsageDescription: 'Mi Almacén usa Face ID para verificar tu identidad al ingresar.',
+    },
   },
   android: {
     package: 'com.delgadodev.mialmacen',
-    versionCode: 1,
+    versionCode: 2,
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -31,7 +34,11 @@ const config: ExpoConfig = {
   web: {
     favicon: './assets/favicon.png',
   },
-  plugins: ['expo-router'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    'expo-local-authentication',
+  ],
   extra: {
     eas: {
       projectId: '66613a19-35d5-46ef-b02f-c392d3d3fc80',

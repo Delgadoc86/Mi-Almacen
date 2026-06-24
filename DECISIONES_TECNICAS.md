@@ -417,3 +417,229 @@ Las reglas no cambian en Fase 6. La protección de categorías locked es **clien
 
 ---
 
+## Fase 7 — Auth, Login y Seguridad
+
+### Persistencia de sesión
+
+- `initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })` reemplaza `getAuth(app)` en `firebase.ts`.
+- Con `getAuth`, Firebase usaba persistencia en-memoria: `onAuthStateChanged` devolvía `null` en cada reinicio.
+- Con `initializeAuth + AsyncStorage`, la sesión sobrevive reinicios de app. El usuario no necesita escribir email/contraseña en cada apertura.
+- Hot-reload: `initializeAuth` lanza `auth/already-initialized` si se llama dos veces sobre el mismo `app`. Se captura y se llama `getAuth(app)` como fallback para obtener la instancia ya inicializada.
+
+### Verificación de email
+
+- `registerWithEmail` llama `sendEmailVerification(user)` después de `createUserWithEmailAndPassword`.
+- Los docs de Firestore (`users`, `businesses`) se crean inmediatamente (sin esperar verificación) para que el negocio esté listo cuando el usuario activa la cuenta.
+- `RootGuard` en `app/_layout.tsx` detecta `firebaseUser && !emailVerified` y redirige a `/(auth)/verify-email`.
+- La pantalla `verify-email.tsx` ofrece: "Ya verifiqué" (llama `reloadUser()` + `recheckEmailVerified()`), "Reenviar" (con cooldown de 60s), "Usar otra cuenta" (logout).
+- Usuarios existentes sin verificar quedarán en `verify-email` hasta que activen su correo — es el comportamiento correcto.
+
+### Recuperación de contraseña
+
+- `sendPasswordReset(email)` envuelve `sendPasswordResetEmail(auth, email)` de Firebase.
+- En `login.tsx`: link "Olvidé mi contraseña" en el campo contraseña (right-aligned) abre un formulario inline dentro de la misma pantalla (sin nueva ruta).
+- El formulario prellenado con el email del campo login. Muestra success/error inline sin Alert.
+- Firebase envía el email de recuperación directamente — no hay lógica adicional del lado del cliente.
+
+### Último ingreso
+
+- `updateLastLogin(uid)` hace `updateDoc` con `lastLoginAt: serverTimestamp()` en `users/{uid}`.
+- Se llama en `login()` del AuthContext (fire-and-forget con `.catch(() => {})` para no bloquear el login si falla).
+- `UserProfile.lastLoginAt?: Timestamp` — opcional para compatibilidad con docs existentes.
+- Se muestra en la sección CUENTA de Settings como "Último ingreso: hoy 17:10 / ayer 09:30 / DD/MM HH:MM".
+- No se actualiza en el registro (primera sesión coincide con `createdAt`).
+
+### Biometría mediante sistema operativo
+
+- Paquetes: `expo-local-authentication` (biometric prompt) + `expo-secure-store` (almacenamiento seguro).
+- Al hacer login con email/contraseña, se guarda el email en SecureStore con clave `biometric_user_email`. Se borra al hacer logout.
+- En la pantalla login, se verifica: `LocalAuthentication.hasHardwareAsync()` + `isEnrolledAsync()` + `SecureStore tiene email guardado`. Si los tres son true → se muestra el botón "Entrar con huella".
+- El botón lanza `LocalAuthentication.authenticateAsync()`. Si tiene éxito → llama `refreshSession()` que verifica si `auth.currentUser` tiene sesión activa en Firebase. Si la sesión persiste (no hubo logout explícito) → el usuario entra sin tipear nada.
+- Si la sesión venció (logout explícito o token expirado) → mensaje "La sesión venció. Ingresá con tu contraseña." — sin reintentos con credenciales guardadas porque NO se guardan contraseñas.
+- iOS: `NSFaceIDUsageDescription` configurado en `app.config.ts`.
+- Android: permisos `USE_BIOMETRIC` y `USE_FINGERPRINT` manejados automáticamente por el plugin.
+
+### No se guarda la contraseña
+
+- Solo se almacena el **email** en SecureStore (para prellenar el campo y mostrar la opción biométrica).
+- Ningún token de Firebase, ninguna contraseña, ningún refresh token se guarda manualmente — Firebase los gestiona internamente via AsyncStorage.
+
+### Mapeo de errores Firebase → mensajes usuario
+
+| Código Firebase              | Mensaje visible                               |
+|------------------------------|-----------------------------------------------|
+| `auth/invalid-credential`    | Email o contraseña incorrectos.               |
+| `auth/too-many-requests`     | Demasiados intentos. Intentá más tarde.       |
+| `auth/user-not-found`        | No existe una cuenta con ese email.           |
+| `auth/wrong-password`        | Contraseña incorrecta.                        |
+| `auth/invalid-email`         | Email inválido.                               |
+| `auth/network-request-failed`| Sin conexión. Verificá tu internet.           |
+| `auth/user-disabled`         | Esta cuenta fue desactivada.                  |
+| `auth/email-already-in-use`  | Ya existe una cuenta con ese email.           |
+| `auth/weak-password`         | La contraseña es muy débil (mín. 6 chars).    |
+| Cualquier otro               | Ocurrió un error. Intentá de nuevo.           |
+
+Los errores se muestran inline en el formulario (no como `Alert.alert`).
+
+### Intentos fallidos
+
+- Contador local `failedAttempts` en `login.tsx`, incrementado en cada `catch`.
+- Después de 3 intentos fallidos, se muestra un hint con fondo ámbar: "¿Olvidaste tu contraseña? Podés recuperarla aquí." con link al formulario de recuperación.
+- Sin bloqueo de cuenta manual — Firebase maneja `auth/too-many-requests` automáticamente.
+- El contador se resetea implícitamente al montar la pantalla (no persiste entre sesiones).
+
+### Nuevas dependencias
+
+| Paquete                  | Versión (SDK 54) | Uso                                       |
+|--------------------------|-----------------|-------------------------------------------|
+| `expo-local-authentication` | compatible SDK 54 | Biometric prompt nativo                |
+| `expo-secure-store`      | compatible SDK 54  | Email guardado de forma segura            |
+
+---
+
+## Mejoras Módulo Fiados (post Fase 4)
+
+### `Customer.reference` — nota de identificación (opcional)
+
+Campo `reference?: string` en el modelo `Customer`.
+
+Permite agregar una referencia libre para identificar al cliente en un negocio de barrio donde el nombre solo puede no ser suficiente.  
+Ejemplos: "Doña Pocha, vecina de la esquina", "hijo de Marta", "mecánico del taller".
+
+- Máximo 80 caracteres (validado en formulario).
+- No es obligatorio; clientes existentes sin `reference` funcionan sin cambios.
+- Se muestra en la tarjeta de detalle del cliente, debajo del teléfono, solo si existe.
+
+---
+
+### `Movement.paymentMethod` — método de cobro (solo pagos)
+
+Tipo `PaymentMethod = 'efectivo' | 'transferencia' | 'mercado_pago' | 'otro'`.
+
+Campo `paymentMethod?: PaymentMethod` en el modelo `Movement`.
+
+- Solo se guarda en Firestore cuando `type === 'pago'`. Los fiados no lo incluyen.
+- El selector aparece únicamente en el formulario de cobro.
+- Valor por defecto al abrir el formulario: `'efectivo'`. Se resetea al cerrar.
+
+**Métodos iniciales soportados:**
+
+| Valor interno   | Etiqueta visible    |
+|-----------------|---------------------|
+| `efectivo`      | Efectivo            |
+| `transferencia` | Transferencia       |
+| `mercado_pago`  | Mercado Pago / QR   |
+| `otro`          | Otro                |
+
+**Compatibilidad con datos existentes:**
+
+- Clientes sin `reference`: campo ausente en Firestore → `undefined` en TypeScript → UI no renderiza nada. Sin migración.
+- Movimientos viejos sin `paymentMethod`: campo ausente → `MovementItem` muestra "Pago" sin método. Sin migración.
+- No se modificaron reglas de Firestore.
+
+---
+
+## Caja Diaria (Fase 8)
+
+### Modelo de datos
+
+**CashSession** (`businesses/{uid}/cashSessions/{id}`):
+- `date: string` — `"YYYY-MM-DD"`. Clave de búsqueda del día. Un solo doc por día (validado al abrir).
+- `openingBalance: number` — monto en caja al momento de abrir.
+- `status: 'open' | 'closed'`
+- `summary` — totales denormalizados, actualizados con `increment()` en cada movimiento:
+  - `totalIngresos`, `totalEgresos`
+  - `efectivo`, `mercadoPago`, `transferencia`, `otro` (desglose de ingresos por medio de pago)
+  - `movementsCount`
+- `closedAt?: Timestamp` — se escribe al cerrar.
+- `createdAt: Timestamp`
+
+**CashMovement** (subcollection `cashSessions/{sessionId}/cashMovements/{id}`):
+- `type: 'ingreso' | 'egreso'`
+- `amount: number` — siempre positivo
+- `medioPago?: PaymentMethod` — solo en ingresos
+- `description?: string` — obligatoria en egresos, opcional en ingresos
+- `createdAt: Timestamp`
+
+### Por qué `date` es string y no Timestamp
+
+La query del día es `where('date', '==', today)` donde `today = "YYYY-MM-DD"`. Un Timestamp requeriría comparar rangos (`>= inicio del día` y `< inicio del día siguiente`) con conversión de zona horaria. El string ISO es determinista, simple y evita el drift horario en Argentina (UTC-3).
+
+### Por qué denormalizar el summary con `increment()`
+
+Alternativa descartada: sumar todos los movimientos en el cliente.
+- Requiere leer N documentos de movimientos para mostrar el saldo actual.
+- `increment()` actualiza el summary en el mismo `writeBatch` que crea el movimiento — 2 writes atómicos, costo fijo.
+- Leer la pantalla principal de Caja = 1 doc de sesión + hasta 5 docs de movimientos (últimos 5). Sin aggregations en cliente.
+
+### Por qué `writeBatch` para movimientos (no `runTransaction`)
+
+- Al registrar un movimiento no se necesita leer antes de escribir: se crea el doc del movimiento y se aplica `increment()` al summary.
+- `writeBatch` es atómico y no tiene overhead de reintentos de `runTransaction`.
+- `runTransaction` se reserva para cuando se deba validar una condición antes de escribir (e.g., futura funcionalidad "cobrar fiado desde Caja" necesita verificar el balance del cliente).
+
+### Sesión del día — una sola por día
+
+`openCashSession` verifica primero `where('date', '==', today)` con `limit(1)`. Si ya existe un doc, lanza error. Esto previene doble apertura incluso si el usuario toca el botón dos veces (race condition mitigada en UI con flag `opening`).
+
+### Cierre de caja — solo cambia status
+
+`closeCashSession` solo actualiza `status: 'closed'` y `closedAt: serverTimestamp()`. Los movimientos de la subcollection no se tocan. El summary ya contiene todos los totales al momento del cierre.
+
+**Por qué no se puede reabrir:** Evita que el comerciante agregue movimientos a un día ya cerrado y altere el historial. Si hubo un error al cerrar, se registra una corrección en el próximo día.
+
+### Saldo actual
+
+```
+saldo = openingBalance + totalIngresos - totalEgresos
+```
+
+No se guarda como campo independiente — se calcula en el cliente. Así no hay posibilidad de inconsistencia entre el saldo guardado y el summary.
+
+### Efectivo en cajón (pantalla de cierre)
+
+```
+efectivoEnCajon = openingBalance + summary.efectivo - summary.totalEgresos
+```
+
+Los gastos se restan del efectivo porque en un almacén típico los pagos a proveedores y gastos operativos se sacan de la caja física.
+
+### Navegación
+
+Mismo patrón Stack sobre Tabs:
+- `(tabs)/cash.tsx` — pantalla principal con 3 sub-vistas: apertura / caja abierta / caja cerrada
+- `cash/new-income.tsx` — registrar ingreso (sin tab bar)
+- `cash/new-expense.tsx` — registrar gasto (sin tab bar)
+- `cash/close.tsx` — pantalla de cierre con resumen
+- `cash/movements.tsx` — listado completo del día (hasta 100 movimientos)
+
+### UX — principio guía
+
+Máximo 2 acciones para registrar cualquier movimiento. Para un ingreso: (1) elegir medio de pago, (2) ingresar monto → GUARDAR. Para un gasto: (1) ingresar monto, (2) ingresar descripción → GUARDAR. Descripción de gasto es obligatoria para mantener el historial útil.
+
+### Reglas Firestore para Caja Diaria
+
+Agregar dentro de `businesses/{businessId}`:
+
+```js
+match /cashSessions/{sessionId} {
+  allow read, create, update: if request.auth != null && request.auth.uid == businessId;
+  // delete NOT allowed — preservar historial de días anteriores
+
+  match /cashMovements/{movementId} {
+    allow read, create: if request.auth != null && request.auth.uid == businessId;
+    // update y delete NOT allowed — movimientos inmutables
+  }
+}
+```
+
+### Limitaciones Fase 8
+
+- No se puede reabrir una sesión cerrada.
+- No hay historial de días anteriores en UI (datos en Firestore, pantalla pendiente).
+- No hay cobro de fiado desde Caja (requeriría `runTransaction` cross-collection — Fase futura).
+- Los gastos no tienen medio de pago (todos se asumen efectivo para el cálculo de "efectivo en cajón").
+- Sin exportación ni reporte mensual de Caja.
+
+---
+

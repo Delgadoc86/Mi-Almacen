@@ -19,6 +19,19 @@ import { updateBusiness, updateBusinessPreferences } from '@/services/userProfil
 import { ROUND_OPTIONS, DEFAULT_MARGIN_MAX } from '@/constants';
 import { theme } from '@/theme';
 import type { RoundTo } from '@/models';
+import type { Timestamp } from 'firebase/firestore';
+
+function formatLastLogin(ts?: Timestamp): string | null {
+  if (!ts || typeof ts.toDate !== 'function') return null;
+  const d = ts.toDate();
+  const now = new Date();
+  const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return `hoy ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `ayer ${time}`;
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + time;
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -103,6 +116,9 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.pageTitle}>Configuración</Text>
+        <Text style={styles.pageSubtitle}>Datos y preferencias de tu comercio</Text>
+
         {/* ── MI COMERCIO ── */}
         <Text style={styles.sectionLabel}>MI COMERCIO</Text>
         <View style={styles.card}>
@@ -126,13 +142,31 @@ export default function SettingsScreen() {
             {savingName ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.saveBtnText}>Guardar</Text>
+              <Text style={styles.saveBtnText}>Guardar nombre</Text>
             )}
           </TouchableOpacity>
 
           <View style={styles.divider} />
-          <Text style={styles.fieldLabel}>Email</Text>
-          <Text style={styles.readOnly}>{userProfile?.email ?? '—'}</Text>
+          <View style={styles.infoRow}>
+            <Ionicons name="mail-outline" size={15} color={theme.colors.muted} style={styles.infoIcon} />
+            <View style={styles.infoContent}>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <Text style={styles.readOnly}>{userProfile?.email ?? '—'}</Text>
+            </View>
+          </View>
+
+          {formatLastLogin(userProfile?.lastLoginAt) ? (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Ionicons name="time-outline" size={15} color={theme.colors.muted} style={styles.infoIcon} />
+                <View style={styles.infoContent}>
+                  <Text style={styles.fieldLabel}>Último ingreso</Text>
+                  <Text style={styles.readOnly}>{formatLastLogin(userProfile?.lastLoginAt)}</Text>
+                </View>
+              </View>
+            </>
+          ) : null}
         </View>
 
         {/* ── PRODUCTOS ── */}
@@ -220,13 +254,24 @@ export default function SettingsScreen() {
           onPress={() => router.push('/categories')}
           activeOpacity={0.7}
         >
-          <Text style={styles.linkText}>Administrar categorías</Text>
+          <View style={styles.linkIconWrap}>
+            <Ionicons name="layers-outline" size={18} color={theme.colors.primary} />
+          </View>
+          <View style={styles.linkBody}>
+            <Text style={styles.linkText}>Administrar categorías</Text>
+            <Text style={styles.linkSubText}>
+              {categories.length === 0
+                ? 'Sin categorías creadas'
+                : `${categories.length} ${categories.length === 1 ? 'categoría' : 'categorías'}`}
+            </Text>
+          </View>
           <Ionicons name="chevron-forward" size={17} color={theme.colors.muted} />
         </TouchableOpacity>
 
         {/* ── CUENTA ── */}
         <Text style={styles.sectionLabel}>CUENTA</Text>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.8}>
+          <Ionicons name="log-out-outline" size={20} color={theme.colors.error} />
           <Text style={styles.logoutText}>Cerrar sesión</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -241,23 +286,43 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   content: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 40,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: theme.colors.muted,
+    fontWeight: '500',
+    marginBottom: 24,
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: theme.colors.muted,
-    letterSpacing: 1,
-    marginBottom: 6,
-    marginTop: 20,
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    marginTop: 16,
   },
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   fieldLabel: {
     fontSize: 13,
@@ -270,11 +335,11 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: theme.colors.background,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     fontSize: 15,
     color: theme.colors.text,
   },
@@ -286,32 +351,37 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: theme.colors.divider,
-    marginVertical: 12,
+    marginVertical: 14,
   },
   readOnly: {
     fontSize: 14,
     color: theme.colors.textSecondary,
+    fontWeight: '500',
   },
   saveBtn: {
-    marginTop: 12,
-    alignSelf: 'flex-end',
+    marginTop: 14,
+    alignSelf: 'stretch',
     backgroundColor: theme.colors.primary,
-    borderRadius: 9,
-    paddingVertical: 9,
-    paddingHorizontal: 20,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
-    minWidth: 96,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   saveBtnTop: {
     marginTop: 16,
-    alignSelf: 'stretch',
   },
   saveBtnDisabled: {
     opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   saveBtnText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   toggleRow: {
@@ -325,10 +395,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   chip: {
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 17,
-    borderWidth: 1,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
@@ -341,36 +411,76 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   chipTextActive: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
     backgroundColor: theme.colors.surface,
-    borderRadius: 14,
+    borderRadius: 20,
     paddingVertical: 14,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  linkIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkBody: {
+    flex: 1,
   },
   linkText: {
     fontSize: 15,
     color: theme.colors.text,
+    fontWeight: '600',
+  },
+  linkSubText: {
+    fontSize: 12,
+    color: theme.colors.muted,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  infoIcon: {
+    marginTop: 2,
+  },
+  infoContent: {
+    flex: 1,
   },
   logoutBtn: {
-    backgroundColor: theme.colors.error,
-    borderRadius: 12,
-    paddingVertical: 13,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.dangerLight,
+    borderWidth: 1.5,
+    borderColor: theme.colors.dangerMid,
+    borderRadius: 16,
+    paddingVertical: 14,
   },
   logoutText: {
-    color: '#fff',
+    color: theme.colors.error,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks/useAuth';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useProducts } from '@/hooks/useProducts';
+import { useCashSession } from '@/hooks/useCashSession';
 import { theme } from '@/theme';
 
 export default function HomeScreen() {
@@ -20,13 +21,27 @@ export default function HomeScreen() {
   const { business } = useAuth();
   const { customers, loading: loadingCustomers } = useCustomers();
   const { products, loading: loadingProducts } = useProducts();
+  const { session, loading: loadingCash } = useCashSession();
 
   const totalDebt = useMemo(() => customers.reduce((s, c) => s + c.balance, 0), [customers]);
   const debtorCount = useMemo(() => customers.filter((c) => c.balance > 0).length, [customers]);
-  const productCount = products.length;
+  const clearCount = customers.length - debtorCount;
+  const categoriesUsed = useMemo(
+    () => new Set(products.map((p) => p.categoryId).filter(Boolean)).size,
+    [products],
+  );
+
+  const saldoActual = session
+    ? session.openingBalance + session.summary.totalIngresos - session.summary.totalEgresos
+    : 0;
+  const movCount = session?.summary.movementsCount ?? 0;
 
   const hasDebt = totalDebt > 0;
   const allClear = !hasDebt && customers.length > 0;
+  const cajaAbierta = session?.status === 'open';
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -35,8 +50,75 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.businessName}>{business?.name ?? 'Mi Almacén'}</Text>
-        <Text style={styles.tagline}>Panel de tu negocio</Text>
+        {/* ── HEADER ── */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.businessName}>{business?.name ?? 'Mi Almacén'}</Text>
+          </View>
+          <View style={styles.logoWrap}>
+            <Ionicons name="storefront" size={20} color="#ffffff" />
+          </View>
+        </View>
+
+        {/* ── CAJA DEL DÍA ── */}
+        <Text style={styles.sectionLabel}>CAJA DEL DÍA</Text>
+        <TouchableOpacity
+          style={[styles.card, cajaAbierta && styles.cardGreen]}
+          onPress={() => router.push('/cash')}
+          activeOpacity={0.75}
+        >
+          {loadingCash ? (
+            <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
+          ) : !session ? (
+            <View style={styles.cardMain}>
+              <View style={[styles.iconWrap, { backgroundColor: theme.colors.divider }]}>
+                <Ionicons name="cash-outline" size={26} color={theme.colors.muted} />
+              </View>
+              <View style={styles.cardBody}>
+                <Text style={[styles.cardAmount, { color: theme.colors.muted }]}>Sin abrir</Text>
+                <Text style={styles.cardSub}>Tocá para abrir la caja de hoy</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+            </View>
+          ) : (
+            <>
+              <View style={styles.cardMain}>
+                <View
+                  style={[
+                    styles.iconWrap,
+                    { backgroundColor: cajaAbierta ? theme.colors.successMid : theme.colors.divider },
+                  ]}
+                >
+                  <Ionicons
+                    name={cajaAbierta ? 'cash' : 'checkmark-circle'}
+                    size={26}
+                    color={cajaAbierta ? theme.colors.success : theme.colors.muted}
+                  />
+                </View>
+                <View style={styles.cardBody}>
+                  <Text
+                    style={[
+                      styles.cardAmount,
+                      cajaAbierta ? styles.amountGreen : null,
+                      saldoActual < 0 && styles.amountRed,
+                    ]}
+                  >
+                    ${saldoActual.toLocaleString('es-AR')}
+                  </Text>
+                  <Text style={styles.cardSub}>
+                    {cajaAbierta ? 'saldo actual' : 'saldo del día · cerrada'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+              </View>
+              <View style={styles.cardDivider} />
+              <Text style={styles.cardMeta}>
+                {movCount} {movCount === 1 ? 'movimiento' : 'movimientos'} registrados
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
 
         {/* ── FIADOS ── */}
         <Text style={styles.sectionLabel}>FIADOS</Text>
@@ -56,19 +138,13 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.iconWrap,
-                    { backgroundColor: hasDebt ? theme.colors.dangerLight : theme.colors.primaryLight },
+                    { backgroundColor: hasDebt ? theme.colors.dangerMid : theme.colors.primaryLight },
                   ]}
                 >
                   <Ionicons
                     name={allClear ? 'checkmark-circle' : 'people'}
                     size={26}
-                    color={
-                      hasDebt
-                        ? theme.colors.error
-                        : allClear
-                        ? theme.colors.success
-                        : theme.colors.primary
-                    }
+                    color={hasDebt ? theme.colors.error : allClear ? theme.colors.success : theme.colors.primary}
                   />
                 </View>
                 <View style={styles.cardBody}>
@@ -80,23 +156,24 @@ export default function HomeScreen() {
                 <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
               </View>
               <View style={styles.cardDivider} />
-              <View style={styles.cardFooter}>
-                <Text style={styles.cardMeta}>
-                  {customers.length === 0
-                    ? 'Sin clientes cargados'
-                    : allClear
-                    ? 'Todos los clientes al día'
-                    : `${debtorCount} cliente${debtorCount !== 1 ? 's deben' : ' debe'}`}
-                </Text>
-                <Text style={styles.cardAction}>Ver fiados</Text>
-              </View>
+              <Text style={styles.cardMeta}>
+                {customers.length === 0
+                  ? 'Sin clientes cargados'
+                  : allClear
+                  ? 'Todos los clientes al día'
+                  : `${debtorCount} deben · ${clearCount} al día`}
+              </Text>
             </>
           )}
         </TouchableOpacity>
 
         {/* ── INVENTARIO ── */}
         <Text style={styles.sectionLabel}>INVENTARIO</Text>
-        <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/products')}
+          activeOpacity={0.75}
+        >
           {loadingProducts ? (
             <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
           ) : (
@@ -106,34 +183,29 @@ export default function HomeScreen() {
                   <Ionicons name="cube" size={26} color={theme.colors.primary} />
                 </View>
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardAmount}>{productCount}</Text>
+                  <Text style={styles.cardAmount}>{products.length}</Text>
                   <Text style={styles.cardSub}>
-                    {productCount === 1 ? 'producto cargado' : 'productos en catálogo'}
+                    {products.length === 1 ? 'producto en catálogo' : 'productos en catálogo'}
                   </Text>
                 </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
               </View>
               <View style={styles.cardDivider} />
-              <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => router.push('/products/new')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add-circle-outline" size={18} color={theme.colors.primary} />
-                  <Text style={styles.actionBtnText}>Nuevo producto</Text>
-                </TouchableOpacity>
-                <View style={styles.actionSep} />
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => router.push('/pdf')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="document-text-outline" size={18} color={theme.colors.primary} />
-                  <Text style={styles.actionBtnText}>Lista PDF</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.cardMeta}>
+                {products.length === 0
+                  ? 'Sin productos cargados'
+                  : categoriesUsed > 0
+                  ? `${categoriesUsed} ${categoriesUsed === 1 ? 'categoría activa' : 'categorías activas'}`
+                  : 'Sin categorías asignadas'}
+              </Text>
             </>
           )}
+        </TouchableOpacity>
+
+        {/* ── LIVE INDICATOR ── */}
+        <View style={styles.updateRow}>
+          <View style={styles.liveDot} />
+          <Text style={styles.updateTime}>Datos en tiempo real</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -141,50 +213,71 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 40,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 28,
+  },
+  greeting: {
+    fontSize: 13,
+    color: theme.colors.muted,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
   businessName: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     color: theme.colors.text,
     letterSpacing: -0.5,
   },
-  tagline: {
-    fontSize: 14,
-    color: theme.colors.muted,
-    marginTop: 2,
-    marginBottom: 28,
+  logoWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: theme.colors.muted,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     marginBottom: 8,
   },
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: theme.colors.border,
     marginBottom: 24,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardRed: {
     backgroundColor: theme.colors.dangerLight,
-    borderColor: '#FECACA',
+    borderColor: theme.colors.dangerMid,
   },
   cardGreen: {
     backgroundColor: theme.colors.successLight,
-    borderColor: '#BBF7D0',
+    borderColor: theme.colors.successMid,
   },
   cardMain: {
     flexDirection: 'row',
@@ -192,68 +285,54 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardBody: { flex: 1 },
   cardAmount: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
     color: theme.colors.text,
-    letterSpacing: -0.5,
+    letterSpacing: -1,
   },
   amountRed: { color: theme.colors.error },
+  amountGreen: { color: theme.colors.success },
   cardSub: {
     fontSize: 13,
     color: theme.colors.textSecondary,
     marginTop: 1,
+    fontWeight: '500',
   },
   cardDivider: {
     height: 1,
     backgroundColor: theme.colors.divider,
-    marginVertical: 12,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginVertical: 14,
   },
   cardMeta: {
     fontSize: 14,
     color: theme.colors.textSecondary,
-    flex: 1,
+    fontWeight: '500',
   },
-  cardAction: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionBtn: {
-    flex: 1,
+  loader: { paddingVertical: 20 },
+  updateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 4,
+    marginTop: 4,
   },
-  actionBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.primary,
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.success,
   },
-  actionSep: {
-    width: 1,
-    height: 24,
-    backgroundColor: theme.colors.divider,
-  },
-  loader: {
-    paddingVertical: 20,
+  updateTime: {
+    fontSize: 11,
+    color: theme.colors.muted,
+    fontWeight: '500',
   },
 });

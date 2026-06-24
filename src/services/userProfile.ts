@@ -75,6 +75,13 @@ export async function updateBusinessPreferences(
   });
 }
 
+export async function updateLastLogin(uid: string): Promise<void> {
+  await updateDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, uid), {
+    lastLoginAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function repairIncompleteRegistration(
   uid: string,
   email: string,

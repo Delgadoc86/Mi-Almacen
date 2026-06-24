@@ -15,7 +15,7 @@ export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: Pro
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
-        <Ionicons name={icon} size={36} color={theme.colors.muted} />
+        <Ionicons name={icon} size={32} color={theme.colors.primary} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -38,32 +38,39 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: theme.colors.divider,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: theme.colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   title: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: theme.colors.text,
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   subtitle: {
     fontSize: 14,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
+    fontWeight: '500',
   },
   btn: {
-    marginTop: 10,
+    marginTop: 12,
     backgroundColor: theme.colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: theme.radius.md,
+    paddingHorizontal: 28,
+    paddingVertical: 15,
+    borderRadius: 16,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   btnText: {
     color: '#fff',

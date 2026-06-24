@@ -9,17 +9,26 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCustomer } from '@/hooks/useCustomer';
 import { useCustomerMovements } from '@/hooks/useCustomerMovements';
 import { registerMovement } from '@/services/customers';
 import { MovementItem } from '@/components/MovementItem';
 import { theme } from '@/theme';
-import type { MovementType } from '@/models';
+import type { MovementType, PaymentMethod } from '@/models';
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'mercado_pago', label: 'Mercado Pago / QR' },
+  { value: 'otro', label: 'Otro' },
+];
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const { userProfile } = useAuth();
   const { customer, loading: customerLoading } = useCustomer(id ?? '');
   const { movements, loading: movementsLoading } = useCustomerMovements(id ?? '');
@@ -27,6 +36,7 @@ export default function CustomerDetailScreen() {
   const [activeForm, setActiveForm] = useState<MovementType | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
   const [saving, setSaving] = useState(false);
 
   function openForm(type: MovementType) {
@@ -39,12 +49,17 @@ export default function CustomerDetailScreen() {
     setActiveForm(null);
     setAmount('');
     setDescription('');
+    setPaymentMethod('efectivo');
   }
 
   async function handleConfirm() {
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
       Alert.alert('Error', 'El monto debe ser mayor a 0.');
+      return;
+    }
+    if (activeForm === 'pago' && customer && amountNum > customer.balance) {
+      Alert.alert('Error', 'El pago no puede superar la deuda actual.');
       return;
     }
     if (!userProfile?.businessId || !id || !activeForm) return;
@@ -56,7 +71,8 @@ export default function CustomerDetailScreen() {
         id,
         activeForm,
         amountNum,
-        description.trim() || undefined,
+        activeForm === 'fiado' ? (description.trim() || undefined) : undefined,
+        activeForm === 'pago' ? paymentMethod : undefined,
       );
       closeForm();
     } catch (err) {
@@ -84,61 +100,70 @@ export default function CustomerDetailScreen() {
   }
 
   const hasDebt = customer.balance > 0;
+  const hasContact = !!(customer.phone || customer.reference);
 
   return (
     <>
-      {/* Override header title with customer name */}
-      <Stack.Screen options={{ title: customer.name }} />
+      <Stack.Screen
+        options={{
+          title: customer.name,
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push(`/customers/${id}/edit` as never)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ paddingRight: 4 }}
+            >
+              <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Balance card */}
+        {/* ── BALANCE CARD ── */}
         <View style={[styles.balanceCard, hasDebt ? styles.balanceCardDebt : styles.balanceCardOk]}>
-          {customer.phone ? <Text style={styles.phone}>{customer.phone}</Text> : null}
           <Text style={[styles.balanceAmount, hasDebt ? styles.textDebt : styles.textOk]}>
             ${customer.balance.toLocaleString('es-AR')}
           </Text>
           <Text style={[styles.balanceStatus, hasDebt ? styles.textDebt : styles.textOk]}>
             {hasDebt ? 'debe' : 'al día'}
           </Text>
+          {hasContact && <View style={styles.contactDivider} />}
+          {customer.phone ? (
+            <Text style={styles.contactLine}>{customer.phone}</Text>
+          ) : null}
+          {customer.reference ? (
+            <Text style={styles.contactRef}>{customer.reference}</Text>
+          ) : null}
         </View>
 
-        {/* Action buttons */}
+        {/* ── ACCIONES ── */}
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.fiadoBtn]}
             onPress={() => openForm('fiado')}
             activeOpacity={0.8}
           >
-            <Text style={styles.actionBtnText}>Registrar fiado</Text>
+            <Text style={[styles.actionBtnText, styles.fiadoBtnText]}>+ Fiado</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.pagoBtn, !hasDebt && styles.actionBtnDisabled]}
             onPress={() => hasDebt && openForm('pago')}
             activeOpacity={hasDebt ? 0.8 : 1}
           >
-            <Text style={[styles.actionBtnText, !hasDebt && styles.actionBtnTextDisabled]}>
-              Registrar cobro
+            <Text style={[styles.actionBtnText, styles.pagoBtnText, !hasDebt && styles.actionBtnTextDisabled]}>
+              Cobrar
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Inline form */}
+        {/* ── FORMULARIO INLINE ── */}
         {activeForm !== null && (
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>
-              {activeForm === 'fiado' ? 'Nuevo fiado' : 'Registrar cobro'}
-            </Text>
-
-            {activeForm === 'pago' && hasDebt && (
-              <Text style={styles.formHint}>
-                Máximo: ${customer.balance.toLocaleString('es-AR')}
-              </Text>
-            )}
-
             <Text style={styles.fieldLabel}>Monto *</Text>
             <TextInput
               style={styles.input}
@@ -150,16 +175,48 @@ export default function CustomerDetailScreen() {
               autoFocus
             />
 
-            <Text style={styles.fieldLabel}>Descripción (opcional)</Text>
-            <TextInput
-              style={styles.input}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Ej: Pan, leche, yerba..."
-              placeholderTextColor={theme.colors.muted}
-              autoCapitalize="sentences"
-              returnKeyType="done"
-            />
+            {activeForm === 'fiado' && (
+              <>
+                <Text style={styles.fieldLabel}>Descripción (opcional)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Ej: pan, bebidas, mercadería"
+                  placeholderTextColor={theme.colors.muted}
+                  autoCapitalize="sentences"
+                  returnKeyType="done"
+                />
+              </>
+            )}
+
+            {activeForm === 'pago' && (
+              <>
+                <Text style={styles.fieldLabel}>Método de cobro</Text>
+                <View style={styles.paymentMethodRow}>
+                  {PAYMENT_METHODS.map((m) => (
+                    <TouchableOpacity
+                      key={m.value}
+                      style={[
+                        styles.methodChip,
+                        paymentMethod === m.value && styles.methodChipSelected,
+                      ]}
+                      onPress={() => setPaymentMethod(m.value)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.methodChipText,
+                          paymentMethod === m.value && styles.methodChipTextSelected,
+                        ]}
+                      >
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             <View style={styles.formActions}>
               <TouchableOpacity
@@ -191,9 +248,9 @@ export default function CustomerDetailScreen() {
           </View>
         )}
 
-        {/* Movement history */}
+        {/* ── HISTORIAL ── */}
         <Text style={styles.historyTitle}>
-          Historial{movements.length > 0 ? ` (últimos ${movements.length})` : ''}
+          Historial{movements.length > 0 ? ` · ${movements.length} movimientos` : ''}
         </Text>
 
         {movementsLoading ? (
@@ -228,109 +285,117 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   balanceCard: {
-    borderRadius: 14,
+    borderRadius: 20,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1.5,
   },
   balanceCardDebt: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#FECACA',
+    backgroundColor: theme.colors.dangerLight,
+    borderColor: theme.colors.dangerMid,
   },
   balanceCardOk: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  phone: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 8,
+    backgroundColor: theme.colors.successLight,
+    borderColor: theme.colors.successMid,
   },
   balanceAmount: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: '800',
-    letterSpacing: -1,
+    letterSpacing: -1.5,
+    lineHeight: 54,
   },
   balanceStatus: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 2,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
-  textDebt: {
-    color: theme.colors.error,
+  textDebt: { color: theme.colors.error },
+  textOk: { color: theme.colors.success },
+  contactDivider: {
+    height: 1,
+    backgroundColor: theme.colors.divider,
+    alignSelf: 'stretch',
+    marginTop: 14,
+    marginBottom: 10,
   },
-  textOk: {
-    color: theme.colors.success,
+  contactLine: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  contactRef: {
+    fontSize: 13,
+    color: theme.colors.muted,
+    fontStyle: 'italic',
+    marginTop: 2,
+    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 16,
   },
   actionBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
-    borderWidth: 2,
   },
   fiadoBtn: {
-    borderColor: theme.colors.error,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: theme.colors.dangerMid,
   },
   pagoBtn: {
-    borderColor: theme.colors.success,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: theme.colors.successMid,
   },
   actionBtnDisabled: {
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.divider,
   },
   actionBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  fiadoBtnText: {
+    color: theme.colors.error,
+  },
+  pagoBtnText: {
+    color: theme.colors.success,
   },
   actionBtnTextDisabled: {
     color: theme.colors.muted,
   },
   formCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    marginBottom: 20,
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  formHint: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginBottom: 8,
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.colors.text,
-    marginTop: 12,
+    color: theme.colors.textSecondary,
     marginBottom: 6,
+    marginTop: 12,
   },
   input: {
     backgroundColor: theme.colors.background,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
+    borderRadius: 12,
+    padding: 13,
+    fontSize: 17,
     color: theme.colors.text,
+    fontWeight: '600',
   },
   formActions: {
     flexDirection: 'row',
@@ -339,11 +404,12 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
   cancelBtnText: {
     fontSize: 14,
@@ -352,33 +418,51 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     flex: 2,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  confirmFiado: {
-    backgroundColor: theme.colors.error,
-  },
-  confirmPago: {
-    backgroundColor: theme.colors.success,
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
+  confirmFiado: { backgroundColor: theme.colors.error },
+  confirmPago: { backgroundColor: theme.colors.success },
+  btnDisabled: { opacity: 0.6 },
   confirmBtnText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#fff',
   },
+  paymentMethodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  methodChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  methodChipSelected: {
+    borderColor: theme.colors.success,
+    backgroundColor: theme.colors.successMid,
+  },
+  methodChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  methodChipTextSelected: {
+    color: theme.colors.success,
+  },
   historyTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: theme.colors.text,
     marginBottom: 4,
   },
-  movementsLoader: {
-    marginTop: 20,
-  },
+  movementsLoader: { marginTop: 20 },
   emptyHistory: {
     fontSize: 14,
     color: theme.colors.muted,

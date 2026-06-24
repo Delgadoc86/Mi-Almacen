@@ -13,14 +13,18 @@ function RootGuard() {
   useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
+    const segs = segments as string[];
+    const inAuthGroup = segs[0] === '(auth)';
+    const onVerifyEmail = inAuthGroup && segs[1] === 'verify-email';
 
     if (!firebaseUser && !inAuthGroup) {
       router.replace('/login');
-    } else if (firebaseUser && inAuthGroup) {
+    } else if (firebaseUser && !firebaseUser.emailVerified && !onVerifyEmail) {
+      router.replace('/verify-email');
+    } else if (firebaseUser && firebaseUser.emailVerified && inAuthGroup) {
       router.replace('/');
     }
-  }, [firebaseUser, loading, segments]);
+  }, [firebaseUser, loading, segments, firebaseUser?.emailVerified]);
 
   if (loading) {
     return (

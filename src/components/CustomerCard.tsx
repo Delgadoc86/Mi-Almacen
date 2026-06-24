@@ -23,15 +23,21 @@ export function CustomerCard({ customer, onPress }: Props) {
           <Text style={styles.name} numberOfLines={1}>
             {customer.name}
           </Text>
-          {customer.phone ? <Text style={styles.phone}>{customer.phone}</Text> : null}
+          {customer.reference ? (
+            <Text style={styles.sub} numberOfLines={1}>{customer.reference}</Text>
+          ) : customer.phone ? (
+            <Text style={styles.sub} numberOfLines={1}>{customer.phone}</Text>
+          ) : null}
         </View>
         <View style={styles.balanceBlock}>
           <Text style={[styles.balance, hasDebt ? styles.balanceDebt : styles.balanceOk]}>
             ${customer.balance.toLocaleString('es-AR')}
           </Text>
-          <Text style={[styles.statusTag, hasDebt ? styles.tagDebt : styles.tagOk]}>
-            {hasDebt ? 'debe' : 'al día'}
-          </Text>
+          <View style={[styles.statusPill, hasDebt ? styles.pillDebt : styles.pillOk]}>
+            <Text style={[styles.statusText, hasDebt ? styles.statusTextDebt : styles.statusTextOk]}>
+              {hasDebt ? 'debe' : 'al día'}
+            </Text>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -41,12 +47,17 @@ export function CustomerCard({ customer, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 8,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   row: {
     flexDirection: 'row',
@@ -54,20 +65,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarDebt: {
-    backgroundColor: theme.colors.dangerLight,
+    backgroundColor: theme.colors.dangerMid,
   },
   avatarOk: {
-    backgroundColor: theme.colors.successLight,
+    backgroundColor: theme.colors.successMid,
   },
   avatarText: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
   },
   avatarTextDebt: {
@@ -80,21 +91,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: theme.colors.text,
     marginBottom: 2,
+    letterSpacing: -0.2,
   },
-  phone: {
-    fontSize: 13,
+  sub: {
+    fontSize: 12,
     color: theme.colors.muted,
+    fontWeight: '500',
   },
   balanceBlock: {
     alignItems: 'flex-end',
-    gap: 3,
+    gap: 4,
   },
   balance: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -104,16 +117,27 @@ const styles = StyleSheet.create({
   balanceOk: {
     color: theme.colors.success,
   },
-  statusTag: {
+  statusPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  pillDebt: {
+    backgroundColor: theme.colors.dangerLight,
+  },
+  pillOk: {
+    backgroundColor: theme.colors.successLight,
+  },
+  statusText: {
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
-  tagDebt: {
+  statusTextDebt: {
     color: theme.colors.error,
   },
-  tagOk: {
+  statusTextOk: {
     color: theme.colors.success,
   },
 });

@@ -2,6 +2,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@/theme';
 import type { Movement } from '@/models';
 
+const PAYMENT_LABELS: Record<string, string> = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transf.',
+  mercado_pago: 'MP / QR',
+  otro: 'Otro',
+};
+
 type Props = {
   movement: Movement;
 };
@@ -18,14 +25,19 @@ function formatDate(ts: Movement['createdAt']): string {
 
 export function MovementItem({ movement }: Props) {
   const isFiado = movement.type === 'fiado';
+  const typeLabel = isFiado
+    ? 'Fiado'
+    : movement.paymentMethod
+      ? `Pago · ${PAYMENT_LABELS[movement.paymentMethod] ?? movement.paymentMethod}`
+      : 'Pago';
   return (
     <View style={styles.item}>
       <View style={styles.left}>
         <Text style={[styles.typeTag, isFiado ? styles.tagFiado : styles.tagPago]}>
-          {isFiado ? 'Fiado' : 'Pago'}
+          {typeLabel}
         </Text>
         <View style={styles.textBlock}>
-          {movement.description ? (
+          {isFiado && movement.description ? (
             <Text style={styles.description} numberOfLines={1}>
               {movement.description}
             </Text>
@@ -50,9 +62,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: theme.colors.divider,
   },
   left: {
     flexDirection: 'row',
@@ -64,17 +76,17 @@ const styles = StyleSheet.create({
   typeTag: {
     fontSize: 11,
     fontWeight: '700',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   tagFiado: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: theme.colors.dangerMid,
     color: theme.colors.error,
   },
   tagPago: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: theme.colors.successMid,
     color: theme.colors.success,
   },
   textBlock: {
@@ -84,6 +96,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.text,
     marginBottom: 2,
+    fontWeight: '500',
   },
   date: {
     fontSize: 12,
@@ -93,8 +106,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   amount: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   amountFiado: {
     color: theme.colors.error,
