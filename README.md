@@ -8,13 +8,17 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 
 ## Características principales
 
-- **Caja Diaria** — apertura, registro de ingresos (efectivo / Mercado Pago / transferencia / otro), registro de gastos con descripción obligatoria, cierre con resumen y efectivo en cajón. Historial de movimientos del día.
-- **Dashboard** — saldo actual de caja, deuda total de fiados y estado del catálogo en tiempo real
-- **Fiados** — registro de créditos y cobros por cliente, historial de movimientos
+- **Caja** — modelo de sesión de trabajo (no de día): apertura con saldo inicial, registro de ingresos por medio de pago, registro de gastos, cierre con resumen. Reapertura sin pérdida de datos. Alerta para sesiones de más de 36 horas. Historial de cajas con duración, saldo inicial y saldo final.
+- **Dashboard** — card unificado con saldo de caja, deuda de fiados e inventario en tiempo real. Diseño de una sola pasada visual.
+- **Fiados** — registro de créditos y cobros por cliente, historial de movimientos. Al cobrar un fiado con caja abierta, el ingreso se registra automáticamente en caja (transacción atómica).
 - **Productos** — alta, edición y eliminación con precio de venta automático (costo + margen + redondeo)
 - **Lista de precios PDF** — generación y compartición del catálogo agrupado por categoría
 - **Categorías** — 9 categorías del sistema + categorías personalizadas
 - **Configuración** — nombre del comercio, margen por defecto, redondeo por defecto, categoría por defecto
+- **Onboarding inicial** — al registrarse, el usuario ve una guía de 4 pasos (abrir caja, crear cliente fiado, agregar producto, generar lista de precios). Se muestra una sola vez. Desde Configuración se puede volver a ver sin que aparezca automáticamente.
+- **Offline** — banner de sin conexión automático. Firebase encola escrituras simples durante caídas momentáneas y sincroniza al reconectar. Transacciones financieras fallan conscientemente sin red.
+- **Exportar datos** — genera un JSON completo (productos, clientes, movimientos de fiados, historial de cajas) compartible por Drive, WhatsApp o email. Recordatorio semanal in-app si hace más de 7 días sin exportar.
+- **Eliminar cuenta** — borra todos los documentos de Firestore en lotes y elimina la cuenta de Firebase Auth. Doble confirmación y manejo de sesión expirada.
 
 ---
 
@@ -142,17 +146,18 @@ MiNegocio/
 │   ├── (auth)/              # Pantallas de login y registro
 │   ├── (app)/
 │   │   ├── (tabs)/          # Tabs: Inicio, Caja, Fiados, Productos, Precios, Config
-│   │   ├── cash/            # Caja Diaria: ingreso, gasto, cierre, movimientos
+│   │   ├── cash/            # Caja: ingreso, gasto, cierre, movimientos, historial
 │   │   ├── products/        # Alta y edición de producto
 │   │   ├── customers/       # Alta y detalle de cliente
 │   │   └── categories/      # Gestión de categorías
+│   ├── onboarding.tsx       # Guía inicial — se muestra una sola vez al registrarse
 │   └── _layout.tsx          # Root layout + guard de autenticación
 ├── src/
-│   ├── components/          # Componentes reutilizables
+│   ├── components/          # Componentes reutilizables (OfflineBanner…)
 │   ├── context/             # AuthContext
-│   ├── hooks/               # useProducts, useCustomers, useCategories…
-│   ├── models/              # Tipos TypeScript (Product, Customer, etc.)
-│   ├── services/            # Acceso a Firebase (products, customers…)
+│   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus…
+│   ├── models/              # Tipos TypeScript (Product, Customer, CashSession…)
+│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount…)
 │   ├── theme/               # Paleta de colores y espaciado
 │   ├── types/               # Declaraciones de tipos globales (env.d.ts)
 │   ├── utils/               # Cálculo de precios, template PDF

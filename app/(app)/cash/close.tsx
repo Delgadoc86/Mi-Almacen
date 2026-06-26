@@ -87,7 +87,7 @@ export default function CloseCashScreen() {
     >
       {/* Resumen */}
       <View style={styles.card}>
-        <SummaryRow label="Saldo inicial del día" value={formatARS(openingBalance)} />
+        <SummaryRow label="Saldo inicial" value={formatARS(openingBalance)} />
 
         <Divider />
         <Text style={styles.sectionTitle}>INGRESOS</Text>
@@ -118,7 +118,7 @@ export default function CloseCashScreen() {
         </View>
 
         <View style={styles.totalBlock}>
-          <Text style={styles.totalLabel}>Saldo total del día</Text>
+          <Text style={styles.totalLabel}>Saldo final</Text>
           <Text style={[styles.totalValue, saldoTotal < 0 && styles.textDanger]}>
             {formatARS(saldoTotal)}
           </Text>
@@ -153,7 +153,7 @@ export default function CloseCashScreen() {
       </TouchableOpacity>
 
       <Text style={styles.closeNote}>
-        Los datos del día quedan guardados. No se puede reabrir.
+        Los datos quedan guardados. Si cerrás por error, podés reabrir la caja.
       </Text>
     </ScrollView>
   );

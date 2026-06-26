@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
 
 function RootGuard() {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, userProfile, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -15,16 +15,24 @@ function RootGuard() {
 
     const segs = segments as string[];
     const inAuthGroup = segs[0] === '(auth)';
+    const inOnboarding = segs[0] === 'onboarding';
     const onVerifyEmail = inAuthGroup && segs[1] === 'verify-email';
+    const onboardingDone = userProfile?.onboarding?.completed === true;
 
     if (!firebaseUser && !inAuthGroup) {
       router.replace('/login');
     } else if (firebaseUser && !firebaseUser.emailVerified && !onVerifyEmail) {
       router.replace('/verify-email');
-    } else if (firebaseUser && firebaseUser.emailVerified && inAuthGroup) {
-      router.replace('/');
+    } else if (firebaseUser && firebaseUser.emailVerified) {
+      if (inAuthGroup) {
+        // Leaving auth screens: go to onboarding first if not done yet
+        router.replace(onboardingDone ? '/' : '/onboarding');
+      } else if (!onboardingDone && !inOnboarding) {
+        // Existing user who never completed onboarding (e.g. first open after update)
+        router.replace('/onboarding');
+      }
     }
-  }, [firebaseUser, loading, segments, firebaseUser?.emailVerified]);
+  }, [firebaseUser, userProfile, loading, segments, firebaseUser?.emailVerified]);
 
   if (loading) {
     return (

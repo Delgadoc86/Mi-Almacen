@@ -2,7 +2,7 @@
 
 ## Stack
 
-- **Expo SDK 56 + React Native 0.85** para builds Android/iOS y acceso a EAS.
+- **Expo SDK 54 + React Native 0.81.5** para builds Android/iOS y acceso a EAS.
 - **TypeScript estricto** desde el inicio: seguridad en cálculos de precios, modelos Firestore y futuras funciones SaaS.
 - **Expo Router** como única estrategia de navegación. No mezclar con React Navigation manual.
 - **StyleSheet propio** con componentes reutilizables. Sin React Native Paper ni librerías de UI externas por ahora.
@@ -642,4 +642,300 @@ match /cashSessions/{sessionId} {
 - Sin exportación ni reporte mensual de Caja.
 
 ---
+
+## Caja v2 — Sesión de trabajo (Fase 9 ROADMAP)
+
+### Modelo: sesión en lugar de día
+
+El campo `date: string` se depreca como criterio de unicidad. La query pasa de `where('date', '==', today)` a `orderBy('createdAt', 'desc') limit(1)`: el doc más reciente es la sesión activa, independientemente del día.
+
+**Por qué no se necesita un índice compuesto:** `orderBy` sobre un solo campo usa el índice single-field que Firestore crea automáticamente. Un índice compuesto solo sería necesario si combinásemos `where + orderBy` sobre campos distintos.
+
+### Regla de unicidad: `where('status', '==', 'open') limit(1)`
+
+`openCashSession` verifica si ya existe una sesión abierta antes de crear una nueva. No es posible tener dos sesiones abiertas simultáneamente para el mismo negocio. Si ya hay una abierta, lanza un error con mensaje claro.
+
+### Reapertura: `updateDoc` con `deleteField()`
+
+`reopenCashSession(businessId, sessionId)` hace un solo `updateDoc`:
+```typescript
+{ status: 'open', closedAt: deleteField() }
+```
+No crea un documento nuevo, no duplica movimientos. El `closedAt` se elimina del documento para que no quede un timestamp de cierre inválido. Los movimientos de la subcollection no se tocan.
+
+### `subscribeLatestSession` vs `subscribeTodaySession`
+
+El hook `useCashSession` usa `subscribeLatestSession` que devuelve el doc más reciente con `onSnapshot`. Devuelve la sesión más reciente sea cual sea su estado (`open` o `closed`). Solo devuelve `null` si el negocio nunca tuvo ninguna sesión — estado inicial de usuario nuevo.
+
+### Historial de cajas
+
+`subscribeCashHistory(businessId, limitCount)` devuelve las últimas N sesiones ordenadas por `createdAt desc`. La numeración de sesiones en la UI se calcula como `total - index` (la más reciente tiene el número más alto). No hay campo `sessionNumber` en Firestore — se infiere en el cliente.
+
+### Alerta de 36 horas — no bloqueante
+
+La alerta se muestra cuando `(Date.now() - openedAt.getTime()) / 3_600_000 > 36`. Es un banner informativo, no un bloqueo. El comerciante puede ignorarla y seguir operando (negocios nocturnos que abren la caja el viernes y la cierran el sábado por la mañana son un caso válido).
+
+---
+
+## Integración Fiados + Caja (Fase 9 ROADMAP)
+
+### Decisión de arquitectura: Enfoque B — dinero unificado en caja
+
+Cuando se cobra un fiado, el pago se suma automáticamente a la caja abierta como ingreso. El dinero es físicamente el mismo: entra a la caja física del comercio. Alternativa descartada (Enfoque A: cuentas separadas) — rompe la realidad operativa del negocio.
+
+### Transacción de 4 escrituras
+
+El cobro de un fiado con caja abierta ejecuta un único `runTransaction` con 4 operaciones:
+
+1. `tx.update(customerRef, { balance: newBalance, updatedAt })` — actualiza deuda del cliente
+2. `tx.set(movRef, { type: 'pago', amount, paymentMethod, balanceAfter })` — registra movimiento en fiados
+3. `tx.set(cashMovRef, { type: 'ingreso', amount, medioPago, description: 'Cobro fiado · Nombre' })` — registra en caja
+4. `tx.update(cashSessionRef, { summary.movementsCount: increment(1), summary.totalIngresos: increment(amount), summary.[method]: increment(amount) })` — actualiza summary de caja
+
+La verificación `tx.get(cashSessionRef)` dentro de la transacción garantiza que la sesión sigue abierta en el momento del commit. Si se cerró entre que el usuario vio la pantalla y confirmó el cobro, la transacción falla y no se registra nada en caja (correcto).
+
+### `cashSessionId` opcional en `registerMovement`
+
+La firma de `registerMovement` acepta `cashSessionId?: string` y `customerName?: string` al final. Si no se pasan (fiado sin caja abierta, o tipo `fiado`), la transacción solo ejecuta las 2 escrituras de fiados. El código de caja no se ejecuta. Sin cambios en el comportamiento existente para clientes que no usan caja.
+
+### Selector de medio de pago — por qué es obligatorio
+
+El desglose por medio de pago en el summary de caja requiere saber con qué método se cobró. Sin selector, todo ingreso del fiado se contabilizaría como efectivo, lo cual es incorrecto si el cobro fue por transferencia o Mercado Pago.
+
+### Aviso inline en la pantalla de cobro
+
+Se muestra un chip debajo del selector de medio de pago:
+- Verde con `✓` — "Se sumará a la caja abierta" — cuando `session?.status === 'open'`
+- Gris — "No hay caja abierta · no se registrará en caja" — cuando no hay sesión o está cerrada
+
+El cobro procede en ambos casos (no bloqueante). El comerciante decide si abrir la caja antes o no.
+
+---
+
+## Fase 10 — UX y Diseño
+
+### Flujo de apertura de caja: acción primero
+
+**Problema:** el componente `OpenAmountForm` tenía `autoFocus={true}` en el TextInput. Al navegar al tab Caja, el teclado saltaba automáticamente sin que el usuario lo hubiera pedido.
+
+**Solución:** `AmountInput` — el TextInput se oculta visualmente con `opacity: 0, width: 1, height: 1, position: 'absolute'`. El display del monto ($0) es un `TouchableOpacity` que llama `inputRef.current?.focus()` al tocar. El teclado solo aparece cuando el usuario lo solicita explícitamente.
+
+**Por qué esta técnica:** Mantiene el input en el DOM para que `focus()` funcione, pero lo hace invisible. El feedback visual del monto digitado se muestra en el `Text` que actualiza en tiempo real.
+
+### ClosedCashView: resumen colapsable
+
+El detalle financiero de la última sesión (9 filas de datos) estaba visible por defecto, empujando el botón "ABRIR NUEVA CAJA" fuera de la pantalla. Se reemplazó por:
+- Un card compacto de una línea (estado + cierre + saldo final)
+- Un toggle "Ver detalle del cierre ↓" que expande los datos bajo demanda
+- El botón de acción primaria siempre visible sin scroll
+
+**Principio aplicado:** acción primero, detalle después. La pantalla responde a "¿qué querés hacer?" antes de mostrar información histórica.
+
+### subView eliminado — `showNewForm: boolean`
+
+El anterior `subView: 'summary' | 'new'` reemplazaba toda la vista cuando el usuario tocaba "Abrir nueva caja", simulando navegación dentro de un tab (aparecía un botón "Volver"). Reemplazado por `showNewForm: boolean` que expande un formulario inline sin ocultar el contexto.
+
+### Tab bar: pill sólido activo
+
+El estado activo anterior usaba `backgroundColor: theme.colors.primaryLight` (#EFF6FF) — demasiado sutil en distintas condiciones de iluminación. Reemplazado por `backgroundColor: theme.colors.primary` con `color: '#fff'` para el ícono. La diferencia activo/inactivo es inmediata e inequívoca.
+
+### Home: card unificado
+
+Los tres cards separados (CAJA / FIADOS / INVENTARIO) con sus etiquetas de sección previas generaban fragmentación visual y consumían demasiado espacio vertical. Reemplazados por un único card con tres filas separadas por dividers. Mismo patrón de lista que usa la pantalla de Fiados (ícono redondo + label + meta + valor + chevron).
+
+---
+
+## Fase 11 — Datos y privacidad
+
+### Offline: qué sí y qué no con Firebase JS SDK
+
+El Firebase JS SDK (no `@react-native-firebase`) usa IndexedDB para persistencia offline, que no está disponible en React Native. En consecuencia:
+
+- **Escrituras simples durante la sesión** (`addDoc`, `updateDoc`, `setDoc`): Firebase las encola en memoria y sincroniza cuando vuelve la red. No requiere código extra.
+- **`runTransaction`**: falla conscientemente si no hay conexión. Correcto para operaciones financieras.
+- **Persistencia entre reinicios de app**: no disponible con el JS SDK sin migrar a `@react-native-firebase`. No implementado en esta fase.
+- **Decisión**: mostrar un banner de "Sin conexión" como capa UI es suficiente para el caso de uso actual. Una caída de datos móviles durante el registro de un movimiento es poco frecuente y el usuario puede reintentar.
+
+### useNetworkStatus: polling con expo-network
+
+`Network.getNetworkStateAsync()` retorna `isInternetReachable` (verificación real de conectividad) y `isConnected` (conectado a red local). Se usa `isInternetReachable ?? isConnected` como fallback. Polling cada 5 segundos — suficiente para este contexto. No se usa un event listener porque `expo-network` no expone uno confiable en todas las plataformas.
+
+### Exportación: JSON con serialización de Timestamps
+
+Los `Timestamp` de Firestore no son serializables a JSON directamente. La función `serializeDoc` convierte recursivamente cualquier objeto con método `toDate()` a string ISO 8601. Cubre Timestamps en cualquier nivel de anidamiento (documentos y subdocumentos).
+
+El archivo resultante se guarda en `FileSystem.cacheDirectory` (no `documentDirectory`) porque es temporal — el usuario lo comparte inmediatamente. El caché se limpia automáticamente por el SO.
+
+**Por qué JSON y no CSV:** El modelo tiene datos jerárquicos (clientes con sus movimientos, sesiones con sus movimientos). CSV requeriría múltiples archivos y un ZIP, lo que añade complejidad y dependencias. JSON es el estándar de portabilidad de datos (GDPR, Google Takeout).
+
+### Recordatorio semanal: AsyncStorage + lógica in-app
+
+No se usan notificaciones push (`expo-notifications` no instalado). El recordatorio es un banner in-app en la pantalla de Config que se muestra cuando `Date.now() - new Date(lastExportAt).getTime() > 7 * 24 * 3600 * 1000`. `lastExportAt` se guarda en AsyncStorage después de cada exportación exitosa.
+
+**Por qué no notificaciones push:** Requieren permisos explícitos del usuario, configuración de canales Android, certificados para iOS, y un servidor para notificaciones remotas. Para un recordatorio semanal simple, el banner in-app tiene el mismo efecto con cero infraestructura.
+
+### Eliminación de cuenta: orden de borrado en Firestore
+
+Firestore no borra subcollections automáticamente al borrar un documento padre. El orden correcto:
+
+```
+1. movements de cada customer     (subcollection)
+2. customers                      (collection)
+3. cashMovements de cada session  (subcollection)
+4. cashSessions                   (collection)
+5. products                       (collection)
+6. categories                     (collection)
+7. businesses/{uid}               (documento raíz del negocio)
+8. users/{uid}                    (perfil de usuario)
+9. auth.currentUser.delete()      (cuenta Firebase Auth)
+```
+
+Los pasos 1 y 3 se ejecutan en `Promise.all` para paralelizar los borrados de subcollections de múltiples clientes/sesiones.
+
+### Eliminación en lotes de 400
+
+`writeBatch` de Firestore tiene límite de 500 operaciones. Se usa 400 como margen seguro. La función `deleteCollection` itera en chunks de 400 y ejecuta un batch por chunk. Para un comercio pequeño (< 400 docs por collection), todo cabe en un batch.
+
+### `auth/requires-recent-login`
+
+Firebase bloquea `deleteUser()` si el último login fue hace más de 5 minutos (operación sensible). Se captura el código de error y se muestra un mensaje orientativo: "Cerrá sesión e ingresá de nuevo antes de eliminar tu cuenta." El usuario cierra sesión, hace login, y puede eliminar inmediatamente.
+
+### Reglas Firestore — actualización necesaria
+
+Para que el borrado de cuenta desde el cliente funcione, las reglas deben permitir `delete` en el documento `businesses/{uid}`. Actualizar:
+
+```js
+match /businesses/{businessId} {
+  // Antes: allow read, create, update
+  allow read, create, update, delete: if request.auth != null && request.auth.uid == businessId;
+  ...
+}
+```
+
+También habilitar `delete` en `users/{userId}` para poder borrar el perfil.
+
+---
+
+## Fase 12 — Onboarding inicial
+
+### Dónde vive la ruta: `app/onboarding.tsx` (root Stack)
+
+Tres alternativas evaluadas:
+
+1. **`app/(auth)/onboarding.tsx`** — Descartado. El `RootGuard` redirige con `router.replace('/')` a todo usuario verificado que esté en el grupo `(auth)`. Habría que agregar una excepción adicional para `onboarding` dentro del grupo, rompiendo la semántica del grupo auth.
+
+2. **`app/(app)/onboarding.tsx`** — Descartado. Quedaría dentro del Stack de `(app)`, que incluye el tab bar en algunas configuraciones. El onboarding no debe tener tab bar.
+
+3. **`app/onboarding.tsx` (root level)** — Elegido. El root Stack de `app/_layout.tsx` lo puede renderizar directamente. El guard puede redirigir a `/onboarding` desde cualquier estado sin efectos laterales. Sin header, sin tab bar, sin grupos que interfieran.
+
+### Cuándo muestra el onboarding — lógica en RootGuard
+
+```typescript
+const onboardingDone = userProfile?.onboarding?.completed === true;
+
+if (firebaseUser && firebaseUser.emailVerified) {
+  if (inAuthGroup) {
+    router.replace(onboardingDone ? '/' : '/onboarding');
+  } else if (!onboardingDone && !inOnboarding) {
+    router.replace('/onboarding');
+  }
+}
+```
+
+El campo `userProfile` se agregó a las dependencias del `useEffect`. El guard re-evalúa cuando cambia el `userProfile` en el contexto — lo cual ocurre al completar el onboarding (actualización optimista, ver abajo).
+
+**Flujo de primer uso:**
+```
+register → verify-email → email verificado → RootGuard: onboardingDone = false → /onboarding
+```
+
+**Flujo de usuario existente sin campo (compatibilidad):**
+```
+login → RootGuard: userProfile.onboarding === undefined → onboardingDone = false → /onboarding
+```
+
+**Flujo de usuario que ya completó onboarding:**
+```
+login → RootGuard: onboardingDone = true → / (home) sin pasar por onboarding
+```
+
+### Actualización optimista para evitar loop de redirección
+
+**Problema:** `markOnboardingComplete()` escribe en Firestore y navega con `router.replace('/')`. Al cambiar de ruta, el `RootGuard` re-evalúa el `useEffect`. En ese momento `userProfile.onboarding` sigue siendo `undefined` en el estado local (la escritura fue a Firestore, no al estado React) → el guard redirige de vuelta a `/onboarding`. Loop.
+
+**Solución:** actualización optimista del estado **antes** del `await`:
+
+```typescript
+// 1. Actualizar contexto local → el guard no redirige en la próxima evaluación
+setState((prev) => ({
+  ...prev,
+  userProfile: prev.userProfile
+    ? { ...prev.userProfile, onboarding: { completed: true, skipped } }
+    : prev.userProfile,
+}));
+// 2. Escribir a Firestore — puede fallar sin bloquear al usuario
+await completeOnboarding(uid, skipped);
+```
+
+Si `completeOnboarding` falla: el estado local ya está actualizado, el usuario llega al Home. Al reiniciar la app, Firestore devuelve el campo sin el campo `onboarding` → el guard muestra el onboarding de nuevo. El comerciante lo ve una vez más y, con conexión, se guarda correctamente.
+
+### `from=settings` — vista manual sin cambiar estado
+
+```typescript
+// Configuración:
+router.push('/onboarding?from=settings');
+
+// Onboarding screen:
+const { from } = useLocalSearchParams<{ from?: string }>();
+const isManual = from === 'settings';
+```
+
+Cuando `isManual = true`:
+- Se muestra "Volver" (`router.back()`) en lugar de "Empezar" / "No mostrar más"
+- No se llama `markOnboardingComplete` — el estado no cambia
+- El guard no interfiere porque el usuario ya tiene `onboardingDone = true`
+
+### Actualización de campos anidados con dot-notation
+
+```typescript
+updateDoc(userRef, {
+  'onboarding.completed': true,       // dot-notation
+  'onboarding.completedAt': serverTimestamp(),
+  'onboarding.skipped': skipped,
+  updatedAt: serverTimestamp(),
+});
+```
+
+Alternativa descartada: `onboarding: { completed: true, ... }` con `updateDoc`. Esto reemplaza el objeto completo — si el campo `onboarding` ya tenía otros campos, se pierden. Con dot-notation solo se tocan los campos especificados; el resto del documento no cambia.
+
+### Compatibilidad con usuarios existentes
+
+`userProfile?.onboarding?.completed === true` evalúa como `false` (no completado) en tres casos:
+- Campo `onboarding` ausente en Firestore (usuarios creados antes de Fase 12)
+- `onboarding.completed` es explícitamente `false`
+- `userProfile` es `null`
+
+No se requiere ninguna migración de datos. Los usuarios existentes ven el onboarding una vez al abrir la app post-update.
+
+### Por qué pantalla única (sin carousel multi-paso)
+
+Target: comerciante de 40–70 años. Un carousel con animaciones, puntos de paginación y gestos de swipe añade fricción de interacción. Los 4 pasos caben en una pantalla estática con scroll mínimo. Menos elementos de UI = menos confusión = mayor tasa de completado.
+
+### Error handling no bloqueante
+
+La especificación establece que un fallo al guardar el onboarding no debe bloquear el uso de la app. Implementación:
+
+```typescript
+try {
+  await markOnboardingComplete(skipped);
+} catch {
+  Alert.alert('Aviso', 'No pudimos guardar la preferencia. Intentá de nuevo.');
+  // No hay return — la navegación continúa
+} finally {
+  setSaving(false);
+}
+router.replace('/');  // Siempre se ejecuta
+```
+
+El `Alert` informa al usuario sin detenerlo. La actualización optimista garantiza que el guard no lo rebota de vuelta.
 

@@ -2,21 +2,24 @@ import { type ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { theme } from '@/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const TAB_ICONS: Record<string, [IconName, IconName]> = {
   index: ['storefront', 'storefront-outline'],
-  products: ['basket', 'basket-outline'],
-  customers: ['wallet', 'wallet-outline'],
   cash: ['cash', 'cash-outline'],
+  customers: ['wallet', 'wallet-outline'],
+  products: ['basket', 'basket-outline'],
   pdf: ['pricetag', 'pricetag-outline'],
   settings: ['options', 'options-outline'],
 };
 
 export default function TabsLayout() {
   return (
+    <View style={{ flex: 1 }}>
+      <OfflineBanner />
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -24,11 +27,15 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: theme.colors.muted,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.label,
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ focused, size }) => {
           const [active, inactive] = TAB_ICONS[route.name] ?? ['ellipse', 'ellipse-outline'];
           return (
             <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-              <Ionicons name={focused ? active : inactive} size={size - 2} color={color} />
+              <Ionicons
+                name={focused ? active : inactive}
+                size={size - 2}
+                color={focused ? '#fff' : theme.colors.muted}
+              />
             </View>
           );
         },
@@ -41,6 +48,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="pdf" options={{ title: 'Precios' }} />
       <Tabs.Screen name="settings" options={{ title: 'Config' }} />
     </Tabs>
+    </View>
   );
 }
 
@@ -64,13 +72,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   iconWrap: {
-    width: 36,
-    height: 28,
-    borderRadius: 14,
+    width: 38,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Pill sólido oscuro: muy obvia la diferencia activo/inactivo
   iconWrapActive: {
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: theme.colors.primary,
   },
 });

@@ -21,7 +21,8 @@ export default function AppLayout() {
       <Stack.Screen name="cash/new-income" options={{ title: 'Registrar ingreso' }} />
       <Stack.Screen name="cash/new-expense" options={{ title: 'Registrar gasto' }} />
       <Stack.Screen name="cash/close" options={{ title: 'Cerrar caja' }} />
-      <Stack.Screen name="cash/movements" options={{ title: 'Movimientos del día' }} />
+      <Stack.Screen name="cash/movements" options={{ title: 'Movimientos' }} />
+      <Stack.Screen name="cash/history" options={{ title: 'Historial de cajas' }} />
     </Stack>
   );
 }

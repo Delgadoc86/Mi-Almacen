@@ -15,6 +15,7 @@ import {
   getBusiness,
   repairIncompleteRegistration,
   updateLastLogin,
+  completeOnboarding,
 } from '@/services/userProfile';
 import { auth } from '@/services/firebase';
 import type { UserProfile, Business } from '@/models';
@@ -37,6 +38,7 @@ type AuthContextType = AuthState & {
   recheckEmailVerified: () => Promise<boolean>;
   refreshSession: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<void>;
+  markOnboardingComplete: (skipped?: boolean) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -145,6 +147,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendEmailVerification(auth.currentUser);
   }
 
+  async function markOnboardingComplete(skipped = false): Promise<void> {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    // Optimistic update so the guard doesn't redirect back to onboarding
+    setState((prev) => ({
+      ...prev,
+      userProfile: prev.userProfile
+        ? { ...prev.userProfile, onboarding: { completed: true, skipped } }
+        : prev.userProfile,
+    }));
+    // Write to Firestore — rethrow so caller can show an alert
+    await completeOnboarding(uid, skipped);
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -157,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         recheckEmailVerified,
         refreshSession,
         resendVerificationEmail,
+        markOnboardingComplete,
       }}
     >
       {children}

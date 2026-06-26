@@ -75,6 +75,15 @@ export async function updateBusinessPreferences(
   });
 }
 
+export async function completeOnboarding(uid: string, skipped = false): Promise<void> {
+  await updateDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, uid), {
+    'onboarding.completed': true,
+    'onboarding.completedAt': serverTimestamp(),
+    'onboarding.skipped': skipped,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateLastLogin(uid: string): Promise<void> {
   await updateDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, uid), {
     lastLoginAt: serverTimestamp(),

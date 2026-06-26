@@ -16,6 +16,10 @@ import { useProducts } from '@/hooks/useProducts';
 import { useCashSession } from '@/hooks/useCashSession';
 import { theme } from '@/theme';
 
+function formatARS(n: number): string {
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { business } = useAuth();
@@ -31,17 +35,49 @@ export default function HomeScreen() {
     [products],
   );
 
-  const saldoActual = session
+  const saldo = session
     ? session.openingBalance + session.summary.totalIngresos - session.summary.totalEgresos
-    : 0;
+    : null;
   const movCount = session?.summary.movementsCount ?? 0;
-
-  const hasDebt = totalDebt > 0;
-  const allClear = !hasDebt && customers.length > 0;
   const cajaAbierta = session?.status === 'open';
+  const hasDebt = totalDebt > 0;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+
+  // ── Caja: colores y textos según estado ──
+  const cajaColor = !session
+    ? theme.colors.muted
+    : cajaAbierta
+    ? theme.colors.success
+    : theme.colors.textSecondary;
+
+  const cajaIconName = !session
+    ? 'cash-outline'
+    : cajaAbierta
+    ? 'cash'
+    : 'checkmark-circle';
+
+  const cajaAmountStr = saldo !== null ? formatARS(saldo) : '—';
+
+  const cajaStatusBadge = !session
+    ? null
+    : cajaAbierta
+    ? 'ABIERTA'
+    : 'CERRADA';
+
+  const cajaMeta = !session
+    ? 'Tocá para abrir'
+    : `${movCount} ${movCount === 1 ? 'movimiento' : 'movimientos'}`;
+
+  // ── Fiados: colores y textos ──
+  const fiadosColor = hasDebt ? theme.colors.error : theme.colors.success;
+  const fiadosMeta =
+    customers.length === 0
+      ? 'Sin clientes aún'
+      : hasDebt
+      ? `${debtorCount} ${debtorCount === 1 ? 'debe' : 'deben'} · ${clearCount} al día`
+      : 'Todos al día';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -61,151 +97,140 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── CAJA DEL DÍA ── */}
-        <Text style={styles.sectionLabel}>CAJA DEL DÍA</Text>
-        <TouchableOpacity
-          style={[styles.card, cajaAbierta && styles.cardGreen]}
-          onPress={() => router.push('/cash')}
-          activeOpacity={0.75}
-        >
-          {loadingCash ? (
-            <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
-          ) : !session ? (
-            <View style={styles.cardMain}>
-              <View style={[styles.iconWrap, { backgroundColor: theme.colors.divider }]}>
-                <Ionicons name="cash-outline" size={26} color={theme.colors.muted} />
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={[styles.cardAmount, { color: theme.colors.muted }]}>Sin abrir</Text>
-                <Text style={styles.cardSub}>Tocá para abrir la caja de hoy</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+        {/* ── DASHBOARD — tres filas en un card unificado ── */}
+        <View style={styles.dashCard}>
+
+          {/* CAJA */}
+          <TouchableOpacity
+            style={styles.dashRow}
+            onPress={() => router.push('/cash')}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.dashIconWrap,
+              { backgroundColor: !session ? theme.colors.divider : cajaAbierta ? theme.colors.successMid : theme.colors.divider },
+            ]}>
+              {loadingCash ? (
+                <ActivityIndicator size="small" color={theme.colors.muted} />
+              ) : (
+                <Ionicons name={cajaIconName} size={22} color={cajaColor} />
+              )}
             </View>
-          ) : (
-            <>
-              <View style={styles.cardMain}>
-                <View
-                  style={[
-                    styles.iconWrap,
+
+            <View style={styles.dashBody}>
+              <View style={styles.dashTitleRow}>
+                <Text style={styles.dashLabel}>Caja</Text>
+                {cajaStatusBadge && (
+                  <View style={[
+                    styles.badge,
                     { backgroundColor: cajaAbierta ? theme.colors.successMid : theme.colors.divider },
-                  ]}
-                >
-                  <Ionicons
-                    name={cajaAbierta ? 'cash' : 'checkmark-circle'}
-                    size={26}
-                    color={cajaAbierta ? theme.colors.success : theme.colors.muted}
-                  />
-                </View>
-                <View style={styles.cardBody}>
-                  <Text
-                    style={[
-                      styles.cardAmount,
-                      cajaAbierta ? styles.amountGreen : null,
-                      saldoActual < 0 && styles.amountRed,
-                    ]}
-                  >
-                    ${saldoActual.toLocaleString('es-AR')}
-                  </Text>
-                  <Text style={styles.cardSub}>
-                    {cajaAbierta ? 'saldo actual' : 'saldo del día · cerrada'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+                  ]}>
+                    <Text style={[
+                      styles.badgeTxt,
+                      { color: cajaAbierta ? theme.colors.success : theme.colors.muted },
+                    ]}>
+                      {cajaStatusBadge}
+                    </Text>
+                  </View>
+                )}
               </View>
-              <View style={styles.cardDivider} />
-              <Text style={styles.cardMeta}>
-                {movCount} {movCount === 1 ? 'movimiento' : 'movimientos'} registrados
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+              <Text style={styles.dashMeta}>{cajaMeta}</Text>
+            </View>
 
-        {/* ── FIADOS ── */}
-        <Text style={styles.sectionLabel}>FIADOS</Text>
-        <TouchableOpacity
-          style={[
-            styles.card,
-            hasDebt ? styles.cardRed : allClear ? styles.cardGreen : null,
-          ]}
-          onPress={() => router.push('/customers')}
-          activeOpacity={0.75}
-        >
-          {loadingCustomers ? (
-            <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
-          ) : (
-            <>
-              <View style={styles.cardMain}>
-                <View
-                  style={[
-                    styles.iconWrap,
-                    { backgroundColor: hasDebt ? theme.colors.dangerMid : theme.colors.primaryLight },
-                  ]}
-                >
-                  <Ionicons
-                    name={allClear ? 'checkmark-circle' : 'people'}
-                    size={26}
-                    color={hasDebt ? theme.colors.error : allClear ? theme.colors.success : theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.cardBody}>
-                  <Text style={[styles.cardAmount, hasDebt && styles.amountRed]}>
-                    ${totalDebt.toLocaleString('es-AR')}
-                  </Text>
-                  <Text style={styles.cardSub}>pendiente total</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
-              </View>
-              <View style={styles.cardDivider} />
-              <Text style={styles.cardMeta}>
-                {customers.length === 0
-                  ? 'Sin clientes cargados'
-                  : allClear
-                  ? 'Todos los clientes al día'
-                  : `${debtorCount} deben · ${clearCount} al día`}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+            <View style={styles.dashRight}>
+              {loadingCash ? null : (
+                <Text style={[
+                  styles.dashAmount,
+                  { color: saldo !== null && saldo < 0 ? theme.colors.error : cajaColor },
+                ]}>
+                  {cajaAmountStr}
+                </Text>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.muted} />
+            </View>
+          </TouchableOpacity>
 
-        {/* ── INVENTARIO ── */}
-        <Text style={styles.sectionLabel}>INVENTARIO</Text>
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => router.push('/products')}
-          activeOpacity={0.75}
-        >
-          {loadingProducts ? (
-            <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
-          ) : (
-            <>
-              <View style={styles.cardMain}>
-                <View style={[styles.iconWrap, { backgroundColor: theme.colors.primaryLight }]}>
-                  <Ionicons name="cube" size={26} color={theme.colors.primary} />
-                </View>
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardAmount}>{products.length}</Text>
-                  <Text style={styles.cardSub}>
-                    {products.length === 1 ? 'producto en catálogo' : 'productos en catálogo'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
-              </View>
-              <View style={styles.cardDivider} />
-              <Text style={styles.cardMeta}>
-                {products.length === 0
-                  ? 'Sin productos cargados'
-                  : categoriesUsed > 0
-                  ? `${categoriesUsed} ${categoriesUsed === 1 ? 'categoría activa' : 'categorías activas'}`
-                  : 'Sin categorías asignadas'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+          <View style={styles.rowDivider} />
 
-        {/* ── LIVE INDICATOR ── */}
-        <View style={styles.updateRow}>
+          {/* FIADOS */}
+          <TouchableOpacity
+            style={styles.dashRow}
+            onPress={() => router.push('/customers')}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.dashIconWrap,
+              { backgroundColor: hasDebt ? theme.colors.dangerMid : theme.colors.successMid },
+            ]}>
+              {loadingCustomers ? (
+                <ActivityIndicator size="small" color={theme.colors.muted} />
+              ) : (
+                <Ionicons
+                  name={hasDebt ? 'people' : 'people-outline'}
+                  size={22}
+                  color={fiadosColor}
+                />
+              )}
+            </View>
+
+            <View style={styles.dashBody}>
+              <Text style={styles.dashLabel}>Fiados</Text>
+              <Text style={styles.dashMeta}>{loadingCustomers ? '...' : fiadosMeta}</Text>
+            </View>
+
+            <View style={styles.dashRight}>
+              {!loadingCustomers && (
+                <Text style={[styles.dashAmount, { color: hasDebt ? theme.colors.error : theme.colors.success }]}>
+                  {formatARS(totalDebt)}
+                </Text>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.muted} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* INVENTARIO */}
+          <TouchableOpacity
+            style={styles.dashRow}
+            onPress={() => router.push('/products')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.dashIconWrap, { backgroundColor: theme.colors.primaryLight }]}>
+              {loadingProducts ? (
+                <ActivityIndicator size="small" color={theme.colors.muted} />
+              ) : (
+                <Ionicons name="cube" size={22} color={theme.colors.primary} />
+              )}
+            </View>
+
+            <View style={styles.dashBody}>
+              <Text style={styles.dashLabel}>Inventario</Text>
+              <Text style={styles.dashMeta}>
+                {loadingProducts
+                  ? '...'
+                  : products.length === 0
+                  ? 'Sin productos aún'
+                  : `${categoriesUsed} ${categoriesUsed === 1 ? 'categoría' : 'categorías'}`}
+              </Text>
+            </View>
+
+            <View style={styles.dashRight}>
+              {!loadingProducts && (
+                <Text style={[styles.dashAmount, { color: theme.colors.primary }]}>
+                  {products.length}
+                  <Text style={styles.dashAmountUnit}> prod</Text>
+                </Text>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.muted} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── LIVE ── */}
+        <View style={styles.liveRow}>
           <View style={styles.liveDot} />
-          <Text style={styles.updateTime}>Datos en tiempo real</Text>
+          <Text style={styles.liveTxt}>Datos en tiempo real</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -215,11 +240,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
+  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -251,78 +273,89 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.colors.muted,
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  card: {
+
+  // ── Dashboard card unificado ──
+  dashCard: {
     backgroundColor: theme.colors.surface,
     borderRadius: 20,
-    padding: 18,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    marginBottom: 24,
+    overflow: 'hidden',
+    marginBottom: 20,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
   },
-  cardRed: {
-    backgroundColor: theme.colors.dangerLight,
-    borderColor: theme.colors.dangerMid,
-  },
-  cardGreen: {
-    backgroundColor: theme.colors.successLight,
-    borderColor: theme.colors.successMid,
-  },
-  cardMain: {
+  dashRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     gap: 14,
   },
-  iconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  rowDivider: {
+    height: 1,
+    backgroundColor: theme.colors.divider,
+    marginHorizontal: 16,
+  },
+  dashIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardBody: { flex: 1 },
-  cardAmount: {
-    fontSize: 32,
-    fontWeight: '800',
+  dashBody: { flex: 1, gap: 2 },
+  dashTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dashLabel: {
+    fontSize: 15,
+    fontWeight: '700',
     color: theme.colors.text,
-    letterSpacing: -1,
   },
-  amountRed: { color: theme.colors.error },
-  amountGreen: { color: theme.colors.success },
-  cardSub: {
+  dashMeta: {
+    fontSize: 12,
+    color: theme.colors.muted,
+    fontWeight: '500',
+  },
+  dashRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  dashAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  dashAmountUnit: {
     fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginTop: 1,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0,
   },
-  cardDivider: {
-    height: 1,
-    backgroundColor: theme.colors.divider,
-    marginVertical: 14,
+
+  // Badge "ABIERTA" / "CERRADA"
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  cardMeta: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    fontWeight: '500',
+  badgeTxt: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  loader: { paddingVertical: 20 },
-  updateRow: {
+
+  // Live
+  liveRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 4,
   },
   liveDot: {
     width: 6,
@@ -330,7 +363,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: theme.colors.success,
   },
-  updateTime: {
+  liveTxt: {
     fontSize: 11,
     color: theme.colors.muted,
     fontWeight: '500',

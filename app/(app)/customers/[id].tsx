@@ -14,6 +14,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCustomer } from '@/hooks/useCustomer';
 import { useCustomerMovements } from '@/hooks/useCustomerMovements';
+import { useCashSession } from '@/hooks/useCashSession';
 import { registerMovement } from '@/services/customers';
 import { MovementItem } from '@/components/MovementItem';
 import { theme } from '@/theme';
@@ -32,6 +33,8 @@ export default function CustomerDetailScreen() {
   const { userProfile } = useAuth();
   const { customer, loading: customerLoading } = useCustomer(id ?? '');
   const { movements, loading: movementsLoading } = useCustomerMovements(id ?? '');
+  const { session } = useCashSession();
+  const cajaAbierta = session?.status === 'open';
 
   const [activeForm, setActiveForm] = useState<MovementType | null>(null);
   const [amount, setAmount] = useState('');
@@ -73,6 +76,8 @@ export default function CustomerDetailScreen() {
         amountNum,
         activeForm === 'fiado' ? (description.trim() || undefined) : undefined,
         activeForm === 'pago' ? paymentMethod : undefined,
+        activeForm === 'pago' && cajaAbierta ? session!.id : undefined,
+        activeForm === 'pago' ? customer?.name : undefined,
       );
       closeForm();
     } catch (err) {
@@ -214,6 +219,19 @@ export default function CustomerDetailScreen() {
                       </Text>
                     </TouchableOpacity>
                   ))}
+                </View>
+
+                <View style={[styles.cashNotice, cajaAbierta ? styles.cashNoticeOpen : styles.cashNoticeWarn]}>
+                  <Ionicons
+                    name={cajaAbierta ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+                    size={14}
+                    color={cajaAbierta ? theme.colors.success : theme.colors.muted}
+                  />
+                  <Text style={[styles.cashNoticeText, { color: cajaAbierta ? theme.colors.success : theme.colors.muted }]}>
+                    {cajaAbierta
+                      ? 'Se sumará a la caja abierta'
+                      : 'No hay caja abierta · no se registrará en caja'}
+                  </Text>
                 </View>
               </>
             )}
@@ -435,6 +453,26 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
+  },
+  cashNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  cashNoticeOpen: {
+    backgroundColor: theme.colors.successLight,
+  },
+  cashNoticeWarn: {
+    backgroundColor: theme.colors.divider,
+  },
+  cashNoticeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
   },
   methodChip: {
     paddingHorizontal: 12,

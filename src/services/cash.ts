@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   increment,
   writeBatch,
+  deleteField,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -56,13 +57,13 @@ function cashMovementsRef(businessId: string, sessionId: string) {
   );
 }
 
-export function subscribeTodaySession(
+// Retorna la sesión más reciente (abierta o cerrada). Null si nunca hubo ninguna.
+export function subscribeLatestSession(
   businessId: string,
   onData: (session: CashSession | null) => void,
   onError: (err: Error) => void,
 ): Unsubscribe {
-  const today = getTodayDateString();
-  const q = query(cashSessionsRef(businessId), where('date', '==', today), limit(1));
+  const q = query(cashSessionsRef(businessId), orderBy('createdAt', 'desc'), limit(1));
   return onSnapshot(
     q,
     (snap) => {
@@ -74,18 +75,33 @@ export function subscribeTodaySession(
   );
 }
 
+// Para la pantalla de historial: devuelve las últimas N sesiones ordenadas por apertura.
+export function subscribeCashHistory(
+  businessId: string,
+  limitCount: number,
+  onData: (sessions: CashSession[]) => void,
+  onError: (err: Error) => void,
+): Unsubscribe {
+  const q = query(cashSessionsRef(businessId), orderBy('createdAt', 'desc'), limit(limitCount));
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() } as CashSession))),
+    onError,
+  );
+}
+
+// Abre una nueva sesión. Falla si ya existe una abierta (sin importar la fecha).
 export async function openCashSession(
   businessId: string,
   openingBalance: number,
 ): Promise<string> {
-  const today = getTodayDateString();
   const existing = await getDocs(
-    query(cashSessionsRef(businessId), where('date', '==', today), limit(1)),
+    query(cashSessionsRef(businessId), where('status', '==', 'open'), limit(1)),
   );
-  if (!existing.empty) throw new Error('Ya existe una caja para hoy.');
+  if (!existing.empty) throw new Error('Ya hay una caja abierta.');
 
   const ref = await addDoc(cashSessionsRef(businessId), {
-    date: today,
+    date: getTodayDateString(),
     openingBalance,
     status: 'open',
     summary: {
@@ -100,6 +116,17 @@ export async function openCashSession(
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+// Reabre una sesión cerrada sin crear una nueva ni duplicar movimientos.
+export async function reopenCashSession(
+  businessId: string,
+  sessionId: string,
+): Promise<void> {
+  await updateDoc(cashSessionRef(businessId, sessionId), {
+    status: 'open',
+    closedAt: deleteField(),
+  });
 }
 
 export async function addCashMovement(
@@ -174,7 +201,3 @@ export async function closeCashSession(
     closedAt: serverTimestamp(),
   });
 }
-
-// Helpers re-exported for screens
-export { getTodayDateString };
-export type { CashSession, CashMovement };

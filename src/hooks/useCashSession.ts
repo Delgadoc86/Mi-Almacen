@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { subscribeTodaySession } from '@/services/cash';
+import { subscribeLatestSession } from '@/services/cash';
 import { useAuth } from '@/hooks/useAuth';
 import type { CashSession } from '@/models';
 
+// Retorna la sesión más reciente (abierta o cerrada).
+// `session` es null solo si el negocio nunca tuvo una caja.
 export function useCashSession() {
   const { userProfile } = useAuth();
   const [session, setSession] = useState<CashSession | null>(null);
@@ -12,7 +14,7 @@ export function useCashSession() {
   useEffect(() => {
     if (!userProfile?.businessId) return;
     setLoading(true);
-    const unsub = subscribeTodaySession(
+    const unsub = subscribeLatestSession(
       userProfile.businessId,
       (data) => {
         setSession(data);

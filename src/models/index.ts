@@ -89,6 +89,12 @@ export type CashMovement = {
 
 export type Plan = 'free' | 'pro';
 
+export type OnboardingState = {
+  completed: boolean;
+  completedAt?: Timestamp;
+  skipped?: boolean;
+};
+
 export type UserProfile = {
   uid: string;
   email: string;
@@ -97,6 +103,7 @@ export type UserProfile = {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastLoginAt?: Timestamp;
+  onboarding?: OnboardingState;
 };
 
 export type Business = {

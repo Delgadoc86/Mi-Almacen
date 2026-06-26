@@ -8,6 +8,7 @@ import {
   runTransaction,
   onSnapshot,
   serverTimestamp,
+  increment,
   query,
   orderBy,
   limit,
@@ -143,10 +144,19 @@ export async function registerMovement(
   amount: number,
   description?: string,
   paymentMethod?: PaymentMethod,
+  cashSessionId?: string,
+  customerName?: string,
 ): Promise<void> {
   const customerRef = customerDocRef(businessId, customerId);
-  // Generate new movement ID outside transaction (safe — only creates a reference)
   const movRef = doc(movementsRef(businessId, customerId));
+
+  // Preparar refs de caja solo si aplica (cobro con sesión abierta)
+  const cashSessionRef = type === 'pago' && cashSessionId
+    ? doc(db, FIRESTORE_COLLECTIONS.BUSINESSES, businessId, FIRESTORE_COLLECTIONS.CASH_SESSIONS, cashSessionId)
+    : null;
+  const cashMovRef = cashSessionRef
+    ? doc(collection(db, FIRESTORE_COLLECTIONS.BUSINESSES, businessId, FIRESTORE_COLLECTIONS.CASH_SESSIONS, cashSessionId!, FIRESTORE_COLLECTIONS.CASH_MOVEMENTS))
+    : null;
 
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(customerRef);
@@ -161,11 +171,11 @@ export async function registerMovement(
       );
     }
 
+    // ── Movimiento del fiado ─────────────────────────────
     tx.update(customerRef, {
       balance: newBalance,
       updatedAt: serverTimestamp(),
     });
-
     tx.set(movRef, {
       type,
       amount,
@@ -174,5 +184,30 @@ export async function registerMovement(
       balanceAfter: newBalance,
       createdAt: serverTimestamp(),
     });
+
+    // ── Ingreso en caja (solo cobros con sesión abierta) ─
+    if (cashSessionRef && cashMovRef) {
+      const sessionSnap = await tx.get(cashSessionRef);
+      if (sessionSnap.exists() && sessionSnap.data()?.status === 'open') {
+        const method = paymentMethod ?? 'efectivo';
+        const summaryUpdate: Record<string, ReturnType<typeof increment>> = {
+          'summary.movementsCount': increment(1),
+          'summary.totalIngresos': increment(amount),
+        };
+        if (method === 'efectivo') summaryUpdate['summary.efectivo'] = increment(amount);
+        else if (method === 'mercado_pago') summaryUpdate['summary.mercadoPago'] = increment(amount);
+        else if (method === 'transferencia') summaryUpdate['summary.transferencia'] = increment(amount);
+        else summaryUpdate['summary.otro'] = increment(amount);
+
+        tx.set(cashMovRef, {
+          type: 'ingreso',
+          amount,
+          medioPago: method,
+          description: `Cobro fiado · ${customerName ?? 'Cliente'}`,
+          createdAt: serverTimestamp(),
+        });
+        tx.update(cashSessionRef, summaryUpdate);
+      }
+    }
   });
 }

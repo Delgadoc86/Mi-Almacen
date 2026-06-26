@@ -73,7 +73,7 @@ export default function CashMovementsScreen() {
         <Ionicons name="receipt-outline" size={52} color={theme.colors.muted} />
         <Text style={styles.emptyTitle}>Sin movimientos</Text>
         <Text style={styles.emptySubtitle}>
-          Registrá un ingreso o gasto para verlo acá
+          Registrá un ingreso o gasto para verlo acá.
         </Text>
       </View>
     );
