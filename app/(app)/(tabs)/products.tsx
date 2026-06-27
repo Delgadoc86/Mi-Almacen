@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -16,15 +17,49 @@ import { ProductCard } from '@/components/ProductCard';
 import { EmptyState } from '@/components/EmptyState';
 import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useCategories';
+import { useAuth } from '@/hooks/useAuth';
+import { importInitialProducts, declineInitialProducts } from '@/services/importInitialProducts';
 import { theme } from '@/theme';
 
 export default function ProductsScreen() {
   const router = useRouter();
   const { products, loading } = useProducts();
   const { categories } = useCategories();
+  const { business, refreshBusiness } = useAuth();
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [importing, setImporting] = useState(false);
+
+  const showInitialOffer =
+    !loading && products.length === 0 && !business?.importedInitialProducts;
+
+  async function handleImport() {
+    if (!business?.id) return;
+    setImporting(true);
+    try {
+      const count = await importInitialProducts(business.id);
+      await refreshBusiness();
+      Alert.alert(
+        'Lista cargada',
+        `Se importaron ${count} producto${count !== 1 ? 's' : ''} a tu catálogo. Podés editarlos o borrarlos cuando quieras.`,
+      );
+    } catch {
+      Alert.alert('Error', 'No se pudo cargar la lista. Intentá de nuevo.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleDecline() {
+    if (!business?.id) return;
+    try {
+      await declineInitialProducts(business.id);
+      await refreshBusiness();
+    } catch {
+      // Non-blocking: worst case the offer shows again next time
+    }
+  }
 
   const categoryMap = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c])),
@@ -84,8 +119,54 @@ export default function ProductsScreen() {
           </ScrollView>
         )}
 
+        <TouchableOpacity
+          style={styles.pricesBtn}
+          onPress={() => router.push('/products/prices')}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="pricetag-outline" size={18} color={theme.colors.primary} />
+          <View style={styles.pricesBtnBody}>
+            <Text style={styles.pricesBtnTitle}>Lista de precios</Text>
+            <Text style={styles.pricesBtnSub}>
+              Generá un PDF para controlar costos y actualizar precios.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.muted} />
+        </TouchableOpacity>
+
         {loading ? (
           <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
+        ) : showInitialOffer ? (
+          <View style={styles.offerWrap}>
+            <View style={styles.offerIconWrap}>
+              <Ionicons name="storefront-outline" size={32} color={theme.colors.primary} />
+            </View>
+            <Text style={styles.offerTitle}>¿Querés empezar con una lista inicial?</Text>
+            <Text style={styles.offerSubtitle}>
+              Cargamos productos comunes de almacén con costo y precio sugerido. Después podés
+              editar, borrar o agregar lo que quieras.
+            </Text>
+            <TouchableOpacity
+              style={[styles.offerPrimaryBtn, importing && styles.btnDisabled]}
+              onPress={handleImport}
+              disabled={importing}
+              activeOpacity={0.85}
+            >
+              {importing ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.offerPrimaryBtnText}>Cargar lista inicial</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.offerSecondaryBtn}
+              onPress={handleDecline}
+              disabled={importing}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.offerSecondaryBtnText}>Empezar desde cero</Text>
+            </TouchableOpacity>
+          </View>
         ) : products.length === 0 ? (
           <EmptyState
             icon="cube-outline"
@@ -182,4 +263,98 @@ const styles = StyleSheet.create({
   },
   loader: { marginTop: 40 },
   list: { paddingBottom: 20 },
+
+  // ── Lista de precios ──────────────────────────────────────
+  pricesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 12,
+  },
+  pricesBtnBody: { flex: 1 },
+  pricesBtnTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  pricesBtnSub: {
+    fontSize: 12,
+    color: theme.colors.muted,
+    fontWeight: '500',
+    marginTop: 1,
+    lineHeight: 17,
+  },
+
+  // ── Lista inicial offer ───────────────────────────────────
+  offerWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+    gap: 12,
+  },
+  offerIconWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  offerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme.colors.text,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  offerSubtitle: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 21,
+    fontWeight: '500',
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  offerPrimaryBtn: {
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  offerPrimaryBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  offerSecondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  offerSecondaryBtnText: {
+    fontSize: 14,
+    color: theme.colors.muted,
+    fontWeight: '600',
+  },
+  btnDisabled: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 });

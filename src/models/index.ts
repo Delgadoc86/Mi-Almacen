@@ -114,6 +114,7 @@ export type Business = {
   defaultRoundTo?: RoundTo;
   defaultCategoryId?: string;
   plan?: Plan;
+  importedInitialProducts?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };

@@ -12,8 +12,9 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 - **Dashboard** — card unificado con saldo de caja, deuda de fiados e inventario en tiempo real. Diseño de una sola pasada visual.
 - **Fiados** — registro de créditos y cobros por cliente, historial de movimientos. Al cobrar un fiado con caja abierta, el ingreso se registra automáticamente en caja (transacción atómica).
 - **Productos** — alta, edición y eliminación con precio de venta automático (costo + margen + redondeo)
-- **Lista de precios PDF** — generación y compartición del catálogo agrupado por categoría
-- **Categorías** — 9 categorías del sistema + categorías personalizadas
+- **Lista de precios PDF** — generación y compartición del catálogo agrupado por categoría; accesible desde la pantalla Productos
+- **Lista inicial de productos** — al registrarse con el catálogo vacío, se ofrece importar 90 productos preconfigurados de almacén (costo y precio sugerido +40%). Los productos son reales: editables y borrables. La oferta no vuelve a aparecer después de aceptar o rechazar.
+- **Categorías** — 10 categorías del sistema (Almacén, Bebidas, Lácteos, Carnes, Fiambrería, Verdulería, Limpieza, Higiene, Panadería, Otros) + categorías personalizadas
 - **Configuración** — nombre del comercio, margen por defecto, redondeo por defecto, categoría por defecto
 - **Onboarding inicial** — al registrarse, el usuario ve una guía de 4 pasos (abrir caja, crear cliente fiado, agregar producto, generar lista de precios). Se muestra una sola vez. Desde Configuración se puede volver a ver sin que aparezca automáticamente.
 - **Offline** — banner de sin conexión automático. Firebase encola escrituras simples durante caídas momentáneas y sincroniza al reconectar. Transacciones financieras fallan conscientemente sin red.
@@ -145,9 +146,9 @@ MiNegocio/
 ├── app/
 │   ├── (auth)/              # Pantallas de login y registro
 │   ├── (app)/
-│   │   ├── (tabs)/          # Tabs: Inicio, Caja, Fiados, Productos, Precios, Config
+│   │   ├── (tabs)/          # Tabs: Inicio, Caja, Fiados, Productos, Config (5 tabs)
 │   │   ├── cash/            # Caja: ingreso, gasto, cierre, movimientos, historial
-│   │   ├── products/        # Alta y edición de producto
+│   │   ├── products/        # Alta, edición y Lista de precios (Stack screen)
 │   │   ├── customers/       # Alta y detalle de cliente
 │   │   └── categories/      # Gestión de categorías
 │   ├── onboarding.tsx       # Guía inicial — se muestra una sola vez al registrarse
@@ -155,13 +156,14 @@ MiNegocio/
 ├── src/
 │   ├── components/          # Componentes reutilizables (OfflineBanner…)
 │   ├── context/             # AuthContext
+│   ├── data/                # Datos estáticos (initialAlmacenProducts — lista inicial de 90 productos)
 │   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus…
 │   ├── models/              # Tipos TypeScript (Product, Customer, CashSession…)
-│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount…)
+│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount, importInitialProducts…)
 │   ├── theme/               # Paleta de colores y espaciado
 │   ├── types/               # Declaraciones de tipos globales (env.d.ts)
 │   ├── utils/               # Cálculo de precios, template PDF
-│   └── constants/           # Categorías por defecto, colecciones Firestore
+│   └── constants/           # Categorías por defecto (10), colecciones Firestore
 ├── assets/                  # Íconos y splash
 ├── .env                     # Variables de entorno (no subir al repo)
 ├── .env.example             # Plantilla de variables

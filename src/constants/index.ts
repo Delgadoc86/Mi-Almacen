@@ -24,7 +24,8 @@ export const DEFAULT_CATEGORIES = [
   { id: 'limpieza', name: 'Limpieza', order: 6, system: true, locked: true },
   { id: 'higiene', name: 'Higiene', order: 7, system: true, locked: true },
   { id: 'panaderia', name: 'Panadería', order: 8, system: true, locked: true },
-  { id: 'otros', name: 'Otros', order: 9, system: true, locked: true },
+  { id: 'fiambreria', name: 'Fiambrería', order: 9, system: true, locked: true },
+  { id: 'otros', name: 'Otros', order: 10, system: true, locked: true },
 ] as const;
 
 export const DEFAULT_CATEGORY_IDS: Set<string> = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
@@ -32,8 +33,7 @@ export const DEFAULT_CATEGORY_IDS: Set<string> = new Set(DEFAULT_CATEGORIES.map(
 export const DEFAULT_MARGIN_MAX = 500;
 
 export const ROUND_OPTIONS: { label: string; value: RoundTo }[] = [
-  { label: '$1', value: 1 },
-  { label: '$5', value: 5 },
+  
   { label: '$10', value: 10 },
   { label: '$50', value: 50 },
   { label: '$100', value: 100 },

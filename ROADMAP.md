@@ -84,6 +84,19 @@
 - Compatible con usuarios existentes sin el campo: se trata como no completado
 - Error no bloqueante: si falla Firestore, el usuario llega al Home igual (actualización optimista en contexto)
 
+## ✅ Fase 13 — Lista inicial de productos
+- 90 productos preconfigurados de almacén (8 categorías: Almacén, Bebidas, Lácteos, Carnes, Fiambrería, Panadería, Limpieza, Higiene)
+- Al registrarse con el catálogo vacío, se ofrece cargar la lista o empezar desde cero
+- Detección de duplicados por nombre normalizado (sin tildes, minúsculas) — idempotente
+- Productos importados son reales: editables, borrables, sin ninguna restricción
+- Flag `importedInitialProducts` en el doc del negocio — la oferta no se repite
+
+## ✅ Fase 14 — Navegación y categorías
+- Fiambrería como 10ª categoría del sistema (ID: `fiambreria`, inmutable, `system: true`, `locked: true`)
+- Pestaña "Precios" eliminada — navegación reducida a 5 tabs (Inicio, Caja, Fiados, Productos, Config)
+- Lista de precios movida como pantalla Stack dentro de Productos (`/products/prices`)
+- Acceso desde un botón compacto siempre visible en la pantalla Productos
+
 ## 🔲 Por definir
 - Estadísticas y reportes
 - Notificaciones push (recordatorios de deuda)

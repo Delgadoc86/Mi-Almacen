@@ -1,6 +1,6 @@
 # Manual del Usuario — Mi Almacén
 
-**Versión 1.0**
+**Versión 1.1.2**
 Aplicación de gestión para almacenes, kioscos y despensas.
 
 ---
@@ -42,7 +42,7 @@ La aplicación funciona en Android y no requiere conexión permanente a internet
 4. Ingresar el nombre del comercio.
 5. Tocar **Crear cuenta**.
 
-La aplicación creará automáticamente el perfil del negocio y las 9 categorías de productos predeterminadas.
+La aplicación creará automáticamente el perfil del negocio y las 10 categorías de productos predeterminadas.
 
 ### Iniciar sesión
 
@@ -83,13 +83,21 @@ Desde esta tarjeta se puede:
 
 ## Productos
 
+### Lista inicial de productos
+
+La primera vez que abre la pestaña **Productos** con el catálogo vacío, la aplicación ofrece dos opciones:
+
+- **Cargar lista inicial** — importa 90 productos de almacén preconfigurados con costo y precio sugerido (+40% de margen). Los productos quedan en su catálogo y puede editarlos o borrarlos como cualquier otro.
+- **Empezar desde cero** — no importa nada; usted carga sus propios productos manualmente.
+
+Esta oferta aparece una sola vez. Si elige "Empezar desde cero" y luego quiere cargar productos, puede hacerlo manualmente desde el botón **+**.
+
 ### Ver los productos
 
 La pestaña **Productos** muestra todos los productos del catálogo.
 
 - Usar la **barra de búsqueda** para buscar por nombre.
-- Usar los **chips de categoría** (fila superior) para filtrar por categoría.
-- Usar los **chips de tipo** (fila inferior) para filtrar por Unidad, Pack o Peso.
+- Usar los **chips de categoría** para filtrar por categoría.
 
 Cada producto muestra:
 - Nombre
@@ -172,18 +180,19 @@ En la pantalla del cliente, debajo de los botones de acción, aparece el **histo
 
 ## Lista de precios (PDF)
 
-La pestaña **PDF** permite generar y compartir el catálogo de productos.
+La lista de precios es accesible desde la pestaña **Productos**, tocando el botón **Lista de precios** (debajo de los chips de categoría).
 
 ### Generar el PDF
 
-1. Ir a la pestaña **PDF**.
-2. Ver la cantidad de productos que se incluirán.
-3. Tocar **Generar y compartir**.
-4. Elegir con qué aplicación compartirlo: WhatsApp, email, Drive, imprimir, etc.
+1. Ir a la pestaña **Productos**.
+2. Tocar **Lista de precios**.
+3. Ver la cantidad de productos que se incluirán.
+4. Tocar **Generar lista**.
+5. Una vez generada, elegir **Abrir PDF**, **Imprimir** o **Compartir PDF** (WhatsApp, email, Drive, etc.).
 
 El PDF incluye todos los productos ordenados por categoría, con nombre, costo y precio de venta.
 
-> **Nota:** Si no hay productos cargados, el botón no estará disponible. Primero cargue productos desde la pestaña **Productos**.
+> **Nota:** Si no hay productos cargados, la lista no estará disponible. Primero cargue productos desde la pestaña **Productos**.
 
 ---
 
@@ -212,7 +221,7 @@ Tocar **Guardar preferencias** para aplicar los cambios.
 
 Tocar **Administrar categorías** para ver y gestionar las categorías:
 
-- Las **9 categorías del sistema** (Almacén, Bebidas, Lácteos, Carnes, Verdulería, Limpieza, Higiene, Panadería, Otros) tienen un ícono de candado y no se pueden eliminar.
+- Las **10 categorías del sistema** (Almacén, Bebidas, Lácteos, Carnes, Fiambrería, Verdulería, Limpieza, Higiene, Panadería, Otros) tienen un ícono de candado y no se pueden eliminar.
 - Se pueden **agregar categorías propias** escribiendo el nombre en la barra superior y tocando el botón **+**.
 - Las categorías personalizadas se pueden eliminar con el ícono de papelera, **siempre que no tengan productos asignados**.
 

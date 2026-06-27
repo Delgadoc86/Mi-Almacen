@@ -120,8 +120,8 @@
 ### Categorías — seed idempotente con IDs fijos
 
 - Subcollection: `businesses/{uid}/categories/{id}`.
-- IDs fijos: `almacen`, `bebidas`, `lacteos`, `carnes`, `verduleria`, `limpieza`, `higiene`, `panaderia`, `otros`.
-- `getOrSeedCategories(businessId)`: si `snap.size >= 9`, devuelve los docs tal cual (sin escribir nada). Si faltan docs (seed interrumpido), corre un `writeBatch` con `setDoc(..., { merge: true })` sobre los 9 IDs fijos.
+- IDs fijos: `almacen`, `bebidas`, `lacteos`, `carnes`, `fiambreria`, `verduleria`, `limpieza`, `higiene`, `panaderia`, `otros`.
+- `getOrSeedCategories(businessId)`: si `snap.size >= DEFAULT_CATEGORIES.length` (10), devuelve los docs tal cual (sin escribir nada). Si faltan docs (seed interrumpido), corre un `writeBatch` con `setDoc(..., { merge: true })` sobre los 10 IDs fijos.
 - `setDoc + merge:true + ID fijo` = **nunca crea duplicados**, aunque se llame N veces. El ID determina el doc.
 - El seed se ejecuta en cada montaje de la pantalla Productos, pero el early-exit evita escrituras innecesarias en el caso normal.
 - Sin UI de edición de categorías en Fase 3.
@@ -345,7 +345,7 @@ El tipo (Unidad/Pack/Peso) es ruido visual en una lista de precios. El comercian
 
 ### Categorías del sistema (locked)
 
-Las 9 categorías por defecto tienen `system: true` y `locked: true` en Firestore (IDs: almacen, bebidas, lacteos, carnes, verduleria, limpieza, higiene, panaderia, otros).
+Las 10 categorías por defecto tienen `system: true` y `locked: true` en Firestore (IDs: almacen, bebidas, lacteos, carnes, fiambreria, verduleria, limpieza, higiene, panaderia, otros).
 
 **Por qué son inmutables:** Mantienen consistencia en todo el sistema. Futuras funcionalidades (reportes, métricas, filtros) pueden asumir que estas categorías siempre existen.
 
@@ -938,4 +938,48 @@ router.replace('/');  // Siempre se ejecuta
 ```
 
 El `Alert` informa al usuario sin detenerlo. La actualización optimista garantiza que el guard no lo rebota de vuelta.
+
+---
+
+## Fase 13 — Lista inicial de productos
+
+### Por qué TypeScript estático y no Firestore ni JSON externo
+
+Los 90 productos predefinidos viven en `src/data/initialAlmacenProducts.ts`. Alternativas descartadas:
+
+- **JSON en assets**: requiere `require()` o fetch, parsing extra y no tiene chequeo de tipos.
+- **Colección Firestore global**: dependencia de red al momento del import; complejidad adicional en reglas de seguridad.
+- **TypeScript estático**: tipado completo en tiempo de compilación, sin dependencias extra, versionado junto al código.
+
+### Detección de duplicados por nombre normalizado
+
+```typescript
+function normalize(name: string): string {
+  return name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+```
+
+Compara nombres sin tildes y en minúsculas. Así, "Aceite de girasol" y "aceite de Girasol" son el mismo producto. No usa ID fijo por producto porque los 90 son una sugerencia inicial — el comerciante puede haberlos creado con nombres ligeramente distintos.
+
+### `importedInitialProducts` en el doc del negocio
+
+Flag booleano en `businesses/{uid}`. Una vez en `true` (tanto al importar como al rechazar), la oferta nunca vuelve a aparecer. Se escribe con `merge: true` para no sobrescribir otros campos del documento.
+
+### Por qué el import requiere consentimiento explícito
+
+La oferta se muestra solo cuando el catálogo está vacío y el flag no está marcado. El usuario debe tocar "Cargar lista inicial" — no hay import automático. Razón: los productos se escriben con costos y precios sugeridos; importar sin permiso sería inesperado y podría generar confusión con datos que el comerciante no reconoce como suyos.
+
+---
+
+## Fase 14 — Navegación simplificada y Fiambrería
+
+### Por qué se eliminó la pestaña "Precios"
+
+Con 6 pestañas, las etiquetas de texto en el tab bar perdían espacio. La lista de precios es una acción puntual (se genera cuando se necesita), no un destino de navegación frecuente. Moverla dentro de Productos (donde viven los datos) es más coherente desde el punto de vista del modelo mental del usuario.
+
+El archivo `app/(app)/(tabs)/pdf.tsx` se mantiene con `href: null` para suprimir su registro como tab sin borrar el historial de git.
+
+### Fiambrería como categoría del sistema
+
+ID `fiambreria`, `order: 9`, desplaza a `otros` a `order: 10`. Se elige como categoría del sistema (no personalizada) porque los almacenes y despensas de barrio típicamente tienen una sección de fiambrería — es tan estructural como las otras 9.
 

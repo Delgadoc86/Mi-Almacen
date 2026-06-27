@@ -12,7 +12,6 @@ const TAB_ICONS: Record<string, [IconName, IconName]> = {
   cash: ['cash', 'cash-outline'],
   customers: ['wallet', 'wallet-outline'],
   products: ['basket', 'basket-outline'],
-  pdf: ['pricetag', 'pricetag-outline'],
   settings: ['options', 'options-outline'],
 };
 
@@ -45,8 +44,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="cash" options={{ title: 'Caja' }} />
       <Tabs.Screen name="customers" options={{ title: 'Fiados' }} />
       <Tabs.Screen name="products" options={{ title: 'Productos' }} />
-      <Tabs.Screen name="pdf" options={{ title: 'Precios' }} />
       <Tabs.Screen name="settings" options={{ title: 'Config' }} />
+      <Tabs.Screen name="pdf" options={{ href: null }} />
     </Tabs>
     </View>
   );
