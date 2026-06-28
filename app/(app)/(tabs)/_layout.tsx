@@ -2,6 +2,7 @@ import { type ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { theme } from '@/theme';
 
@@ -16,6 +17,7 @@ const TAB_ICONS: Record<string, [IconName, IconName]> = {
 };
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1 }}>
       <OfflineBanner />
@@ -24,7 +26,10 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.muted,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, {
+          height: 68 + insets.bottom,
+          paddingBottom: 12 + insets.bottom,
+        }],
         tabBarLabelStyle: styles.label,
         tabBarIcon: ({ focused, size }) => {
           const [active, inactive] = TAB_ICONS[route.name] ?? ['ellipse', 'ellipse-outline'];
@@ -56,8 +61,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    height: 68,
-    paddingBottom: 12,
     paddingTop: 4,
     elevation: 16,
     shadowColor: '#0F172A',

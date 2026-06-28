@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +13,6 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { deleteField } from 'firebase/firestore';
 import type { UpdateData } from 'firebase/firestore';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
 import { getProduct, updateProduct, deleteProduct } from '@/services/products';
@@ -45,11 +43,10 @@ export default function EditProductScreen() {
   const [margin, setMargin] = useState('');
   const [roundTo, setRoundTo] = useState<RoundTo>(1);
   const [unitsPerPack, setUnitsPerPack] = useState('');
+  const [salePrice, setSalePrice] = useState('');
+  const [salePriceEdited, setSalePriceEdited] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  // Price protection
-  const [keepCurrentPrice, setKeepCurrentPrice] = useState(true);
 
   useEffect(() => {
     if (!userProfile?.businessId || !id) return;
@@ -68,17 +65,14 @@ export default function EditProductScreen() {
     setMargin(String(product.margin));
     setRoundTo(product.roundTo);
     setUnitsPerPack(product.unitsPerPack ? String(product.unitsPerPack) : '');
+    setSalePrice(String(product.salePrice ?? product.price));
+    setSalePriceEdited(true);
   }, [product]);
-
-  // Reset price choice whenever the condition changes
-  useEffect(() => {
-    setKeepCurrentPrice(true);
-  }, [cost, margin, roundTo, type, unitsPerPack]);
 
   const costNum = parseFloat(cost) || 0;
   const marginNum = parseFloat(margin) || 0;
   const unitsNum = parseInt(unitsPerPack, 10) || 0;
-  const price = calculatePrice(
+  const suggestedPrice = calculatePrice(
     costNum,
     marginNum,
     roundTo,
@@ -86,8 +80,21 @@ export default function EditProductScreen() {
     type === 'pack' ? unitsNum : undefined,
   );
 
-  // Price protection: warn when new calculated price < current saved price
-  const priceLower = costNum > 0 && product !== null && price < product.price;
+  useEffect(() => {
+    if (!salePriceEdited && suggestedPrice > 0) {
+      setSalePrice(String(suggestedPrice));
+    }
+  }, [suggestedPrice, salePriceEdited]);
+
+  function handleSalePriceChange(text: string) {
+    setSalePrice(text);
+    setSalePriceEdited(true);
+  }
+
+  function resetSalePrice() {
+    setSalePrice(String(suggestedPrice));
+    setSalePriceEdited(false);
+  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -112,8 +119,7 @@ export default function EditProductScreen() {
     }
     if (!userProfile?.businessId || !id) return;
 
-    // Apply price protection decision
-    const finalPrice = priceLower && keepCurrentPrice ? product!.price : price;
+    const salePriceNum = parseFloat(salePrice) || suggestedPrice;
 
     const updateData: UpdateData<Product> = {
       name: name.trim(),
@@ -122,7 +128,9 @@ export default function EditProductScreen() {
       cost: costNum,
       margin: marginNum,
       roundTo,
-      price: finalPrice,
+      price: suggestedPrice,
+      suggestedPrice,
+      salePrice: salePriceNum,
     };
 
     if (type === 'pack' && unitsNum > 0) {
@@ -192,7 +200,7 @@ export default function EditProductScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
     >
       <ScrollView
         style={styles.flex}
@@ -299,51 +307,35 @@ export default function EditProductScreen() {
           ))}
         </View>
 
-        {/* ── PRICE PREVIEW ── */}
         {costNum > 0 && (
-          <View style={styles.preview}>
-            <Text style={styles.previewLabel}>Precio de venta calculado</Text>
-            <Text style={styles.previewPrice}>${price.toLocaleString('es-AR')}</Text>
-            {type === 'pack' && unitsNum > 0 && (
-              <Text style={styles.previewSub}>
-                Costo unitario: ${(costNum / unitsNum).toFixed(2)}
-              </Text>
-            )}
-          </View>
-        )}
+          <>
+            <View style={styles.preview}>
+              <Text style={styles.previewLabel}>Precio sugerido</Text>
+              <Text style={styles.previewPrice}>${suggestedPrice.toLocaleString('es-AR')}</Text>
+              {type === 'pack' && unitsNum > 0 && (
+                <Text style={styles.previewSub}>
+                  Costo unitario: ${(costNum / unitsNum).toFixed(2)}
+                </Text>
+              )}
+            </View>
 
-        {/* ── PRICE PROTECTION WARNING ── */}
-        {priceLower && (
-          <View style={styles.priceLowerCard}>
-            <View style={styles.priceLowerHeader}>
-              <Ionicons name="warning-outline" size={16} color="#92400E" />
-              <Text style={styles.priceLowerTitle}>El precio calculado es menor al precio actual</Text>
-            </View>
-            <Text style={styles.priceLowerValues}>
-              Precio actual: ${product.price.toLocaleString('es-AR')}{'  →  '}
-              Calculado: ${price.toLocaleString('es-AR')}
-            </Text>
-            <View style={styles.priceChoiceRow}>
-              <TouchableOpacity
-                style={[styles.priceChoiceBtn, keepCurrentPrice && styles.priceChoiceBtnActive]}
-                onPress={() => setKeepCurrentPrice(true)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.priceChoiceBtnText, keepCurrentPrice && styles.priceChoiceBtnTextActive]}>
-                  Mantener ${product.price.toLocaleString('es-AR')}
+            <Text style={styles.fieldLabel}>Precio de venta *</Text>
+            <TextInput
+              style={styles.input}
+              value={salePrice}
+              onChangeText={handleSalePriceChange}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={theme.colors.muted}
+            />
+            {suggestedPrice > 0 && salePrice !== String(suggestedPrice) && (
+              <TouchableOpacity style={styles.resetBtn} onPress={resetSalePrice} activeOpacity={0.7}>
+                <Text style={styles.resetBtnText}>
+                  Usar precio sugerido (${suggestedPrice.toLocaleString('es-AR')})
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.priceChoiceBtn, !keepCurrentPrice && styles.priceChoiceBtnActive]}
-                onPress={() => setKeepCurrentPrice(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.priceChoiceBtnText, !keepCurrentPrice && styles.priceChoiceBtnTextActive]}>
-                  Usar ${price.toLocaleString('es-AR')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            )}
+          </>
         )}
 
         <TouchableOpacity
@@ -391,7 +383,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 48,
+    paddingBottom: 100,
   },
   fieldLabel: {
     fontSize: 13,
@@ -481,64 +473,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '500',
   },
-
-  // Price protection
-  priceLowerCard: {
-    backgroundColor: theme.colors.warningLight,
-    borderWidth: 1.5,
-    borderColor: '#FDE68A',
-    borderRadius: 14,
-    padding: 14,
+  resetBtn: {
+    alignSelf: 'flex-start',
+    marginTop: -8,
     marginBottom: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: theme.colors.primaryMid,
   },
-  priceLowerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginBottom: 6,
-  },
-  priceLowerTitle: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#92400E',
-    lineHeight: 18,
-  },
-  priceLowerValues: {
-    fontSize: 13,
-    color: '#92400E',
-    fontWeight: '500',
-    marginBottom: 12,
-    lineHeight: 19,
-  },
-  priceChoiceRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  priceChoiceBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FDE68A',
-    backgroundColor: 'rgba(255,255,255,0.55)',
-  },
-  priceChoiceBtnActive: {
-    backgroundColor: '#F59E0B',
-    borderColor: '#F59E0B',
-  },
-  priceChoiceBtnText: {
+  resetBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#92400E',
-    textAlign: 'center',
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
-  priceChoiceBtnTextActive: {
-    color: '#fff',
-  },
-
-  // Buttons
   saveBtn: {
     marginTop: 8,
     backgroundColor: theme.colors.primary,

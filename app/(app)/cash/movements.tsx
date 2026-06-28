@@ -1,13 +1,17 @@
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCashSession } from '@/hooks/useCashSession';
 import { useCashMovements } from '@/hooks/useCashMovements';
+import { useAuth } from '@/hooks/useAuth';
+import { annulCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
 import type { CashMovement } from '@/models';
 
@@ -27,6 +31,7 @@ function getMovHour(mov: CashMovement): string {
 }
 
 function getMovSubtitle(mov: CashMovement): string {
+  if (mov.isReversal) return 'Anulación de movimiento';
   if (mov.type === 'ingreso') {
     const method = mov.medioPago ? (PAYMENT_LABEL[mov.medioPago] ?? 'Otro') : 'Efectivo';
     return `Ingreso · ${method}`;
@@ -34,19 +39,70 @@ function getMovSubtitle(mov: CashMovement): string {
   return mov.description ? `Gasto · ${mov.description}` : 'Gasto';
 }
 
-function MovementRow({ movement }: { movement: CashMovement }) {
+function MovementRow({
+  movement,
+  onAnnul,
+}: {
+  movement: CashMovement;
+  onAnnul?: () => void;
+}) {
   const isIngreso = movement.type === 'ingreso';
-  const color = isIngreso ? theme.colors.success : theme.colors.error;
-  const amountStr =
-    (isIngreso ? '+' : '-') + '$' + Math.round(movement.amount).toLocaleString('es-AR');
+  const isAnnulled = !!movement.annulled;
+  const isReversal = !!movement.isReversal;
+  const canAnnul = !isAnnulled && !isReversal && !!onAnnul;
+
+  const color =
+    isAnnulled || isReversal
+      ? theme.colors.muted
+      : isIngreso
+        ? theme.colors.success
+        : theme.colors.error;
+
+  const amountStr = isReversal
+    ? '$' + Math.round(movement.amount).toLocaleString('es-AR')
+    : (isIngreso ? '+' : '-') + '$' + Math.round(movement.amount).toLocaleString('es-AR');
+
+  function handleMenuPress() {
+    Alert.alert('Opciones', undefined, [
+      {
+        text: 'Anular movimiento',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            'Anular movimiento',
+            '¿Anulás este movimiento? Se creará un movimiento inverso. Esta acción no se puede deshacer.',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Anular', style: 'destructive', onPress: onAnnul },
+            ],
+          );
+        },
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  }
 
   return (
-    <View style={styles.movRow}>
-      <Text style={styles.movHour}>{getMovHour(movement)}</Text>
-      <Text style={[styles.movSubtitle, { color }]} numberOfLines={1}>
-        {getMovSubtitle(movement)}
-      </Text>
-      <Text style={[styles.movAmount, { color }]}>{amountStr}</Text>
+    <View style={[styles.movRow, isAnnulled && styles.movRowAnnulled]}>
+      {isAnnulled && <Text style={styles.annulledBadge}>ANULADO</Text>}
+      <View style={styles.movRowContent}>
+        <View style={styles.movRowLeft}>
+          <Text style={styles.movHour}>{getMovHour(movement)}</Text>
+          <Text style={[styles.movSubtitle, { color }]} numberOfLines={1}>
+            {getMovSubtitle(movement)}
+          </Text>
+          <Text style={[styles.movAmount, { color }]}>{amountStr}</Text>
+        </View>
+        {canAnnul && (
+          <TouchableOpacity
+            style={styles.movMenuBtn}
+            onPress={handleMenuPress}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="ellipsis-vertical" size={20} color={theme.colors.muted} />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -58,6 +114,17 @@ function Separator() {
 export default function CashMovementsScreen() {
   const { session } = useCashSession();
   const { movements, loading } = useCashMovements(session?.id ?? null, 100);
+  const { userProfile } = useAuth();
+
+  async function handleAnnulMovement(movementId: string) {
+    if (!userProfile?.businessId || !session?.id) return;
+    try {
+      await annulCashMovement(userProfile.businessId, session.id, movementId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo anular el movimiento.';
+      Alert.alert('Error', msg);
+    }
+  }
 
   if (loading) {
     return (
@@ -84,7 +151,12 @@ export default function CashMovementsScreen() {
       style={styles.list}
       data={movements}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => <MovementRow movement={item} />}
+      renderItem={({ item }) => (
+        <MovementRow
+          movement={item}
+          onAnnul={() => handleAnnulMovement(item.id)}
+        />
+      )}
       ItemSeparatorComponent={Separator}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.listContent}
@@ -132,8 +204,30 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: theme.colors.background,
   },
+  movRowAnnulled: {
+    opacity: 0.55,
+  },
+  annulledBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: theme.colors.muted,
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  movRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  movRowLeft: {
+    flex: 1,
+  },
   movHour: { fontSize: 12, color: theme.colors.muted, fontWeight: '500', marginBottom: 4 },
   movSubtitle: { fontSize: 15, fontWeight: '600', marginBottom: 5 },
   movAmount: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  movMenuBtn: {
+    paddingLeft: 12,
+    alignSelf: 'center',
+  },
   separator: { height: 1, backgroundColor: theme.colors.divider },
 });

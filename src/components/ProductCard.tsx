@@ -26,7 +26,7 @@ export function ProductCard({ product, category, onPress }: Props) {
             {category?.name ?? '—'} · {TYPE_LABELS[product.type] ?? product.type}
           </Text>
         </View>
-        <Text style={styles.price}>${product.price.toLocaleString('es-AR')}</Text>
+        <Text style={styles.price}>${(product.salePrice ?? product.price).toLocaleString('es-AR')}</Text>
       </View>
       <View style={styles.bottomRow}>
         <Text style={styles.cost}>

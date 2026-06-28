@@ -8,15 +8,15 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 
 ## Características principales
 
-- **Caja** — modelo de sesión de trabajo (no de día): apertura con saldo inicial, registro de ingresos por medio de pago, registro de gastos, cierre con resumen. Reapertura sin pérdida de datos. Alerta para sesiones de más de 36 horas. Historial de cajas con duración, saldo inicial y saldo final.
+- **Caja** — modelo de sesión de trabajo (no de día): apertura con saldo inicial, registro de ingresos por medio de pago, registro de gastos, cierre con resumen. Reapertura sin pérdida de datos. Alerta para sesiones de más de 36 horas. Historial de cajas con duración, saldo inicial y saldo final. Anulación de movimientos de ingreso y gasto mediante inversión auditada.
 - **Dashboard** — card unificado con saldo de caja, deuda de fiados e inventario en tiempo real. Diseño de una sola pasada visual.
-- **Fiados** — registro de créditos y cobros por cliente, historial de movimientos. Al cobrar un fiado con caja abierta, el ingreso se registra automáticamente en caja (transacción atómica).
-- **Productos** — alta, edición y eliminación con precio de venta automático (costo + margen + redondeo)
-- **Lista de precios PDF** — generación y compartición del catálogo agrupado por categoría; accesible desde la pantalla Productos
+- **Fiados** — registro de créditos y cobros por cliente, historial de movimientos. Al cobrar un fiado con caja abierta, el ingreso se registra automáticamente en caja (transacción atómica). Anulación de movimientos mediante inversión auditada: se crea un movimiento inverso y el original queda marcado como ANULADO (no se eliminan datos).
+- **Productos** — alta, edición y eliminación. Precio sugerido calculado automáticamente (costo + margen + redondeo) y precio de venta editable de forma independiente. Retrocompatible con productos existentes.
+- **Lista de precios PDF** — generación del catálogo agrupado por categoría en formato PDF. Herramienta de control de precios para el dueño del negocio; accesible desde la pantalla Productos.
 - **Lista inicial de productos** — al registrarse con el catálogo vacío, se ofrece importar 90 productos preconfigurados de almacén (costo y precio sugerido +40%). Los productos son reales: editables y borrables. La oferta no vuelve a aparecer después de aceptar o rechazar.
 - **Categorías** — 10 categorías del sistema (Almacén, Bebidas, Lácteos, Carnes, Fiambrería, Verdulería, Limpieza, Higiene, Panadería, Otros) + categorías personalizadas
 - **Configuración** — nombre del comercio, margen por defecto, redondeo por defecto, categoría por defecto
-- **Onboarding inicial** — al registrarse, el usuario ve una guía de 4 pasos (abrir caja, crear cliente fiado, agregar producto, generar lista de precios). Se muestra una sola vez. Desde Configuración se puede volver a ver sin que aparezca automáticamente.
+- **Onboarding inicial** — al registrarse, el usuario ve una guía de 4 pasos (abrir caja, crear cliente fiado, agregar producto, controlar lista de precios). Se muestra una sola vez. Desde Configuración se puede volver a ver sin que aparezca automáticamente.
 - **Offline** — banner de sin conexión automático. Firebase encola escrituras simples durante caídas momentáneas y sincroniza al reconectar. Transacciones financieras fallan conscientemente sin red.
 - **Exportar datos** — genera un JSON completo (productos, clientes, movimientos de fiados, historial de cajas) compartible por Drive, WhatsApp o email. Recordatorio semanal in-app si hace más de 7 días sin exportar.
 - **Eliminar cuenta** — borra todos los documentos de Firestore en lotes y elimina la cuenta de Firebase Auth. Doble confirmación y manejo de sesión expirada.
@@ -215,6 +215,26 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 ## Limitaciones conocidas
 
 - La generación de PDF requiere entorno nativo; no funciona en la versión web.
+
+---
+
+## Historial de versiones
+
+### v1.2.0 — 2026-06-28
+- **Precio de venta editable** — los productos tienen ahora dos precios diferenciados: `suggestedPrice` (calculado automáticamente por costo + margen + redondeo, solo lectura) y `salePrice` (editable por el dueño). Al crear o editar un producto, el precio de venta se sincroniza automáticamente con el sugerido a menos que el usuario lo modifique. Se muestra un botón para volver al sugerido en cualquier momento. El PDF y las tarjetas de producto usan `salePrice`. Retrocompatible con productos existentes.
+- **Anulación de movimientos** — tanto los movimientos de fiado/cobro (clientes) como los de ingreso/gasto (caja) se pueden anular. La anulación crea un movimiento inverso en la misma subcolección, marca el original con `annulled: true` y corrige el saldo en una transacción atómica. Los movimientos anulados muestran el badge **ANULADO** en gris. No se eliminan datos del historial.
+- **Corrección de onboarding** — el paso 4 dejaba de entender que el PDF era para compartir con clientes. Ahora describe correctamente que la lista de precios es una herramienta de control del dueño del negocio.
+
+### v1.1.2
+- Lista inicial de 90 productos preconfigurados de almacén con costo y precio sugerido (+40% margen)
+- Tab Fiambrería
+- Navegación con 5 tabs
+
+### v1.1.1
+- Caja v2: modelo de sesión de trabajo (no de día), reapertura sin pérdida de datos, alerta para sesiones de más de 36 horas, historial de cajas
+
+### v1.0.1
+- Caja Diaria v1: apertura, registro de ingresos y gastos, cierre con resumen, historial de movimientos
 
 ---
 

@@ -137,6 +137,49 @@ export function subscribeToMovements(
   );
 }
 
+export async function annulMovement(
+  businessId: string,
+  customerId: string,
+  movementId: string,
+): Promise<void> {
+  const customerRef = customerDocRef(businessId, customerId);
+  const origRef = doc(movementsRef(businessId, customerId), movementId);
+  const reversalRef = doc(movementsRef(businessId, customerId));
+
+  await runTransaction(db, async (tx) => {
+    const [origSnap, customerSnap] = await Promise.all([tx.get(origRef), tx.get(customerRef)]);
+
+    if (!origSnap.exists()) throw new Error('Movimiento no encontrado.');
+    if (!customerSnap.exists()) throw new Error('Cliente no encontrado.');
+
+    const orig = origSnap.data();
+    const currentBalance = (customerSnap.data().balance as number) ?? 0;
+
+    if (orig.annulled) throw new Error('Este movimiento ya fue anulado.');
+    if (orig.type === 'reversal') throw new Error('No se puede anular una anulación.');
+
+    // fiado incremented balance → reversal decrements it; pago decremented → reversal increments
+    const delta = orig.type === 'fiado' ? -(orig.amount as number) : (orig.amount as number);
+    const newBalance = currentBalance + delta;
+
+    if (newBalance < 0) {
+      throw new Error('No se puede anular: el cliente realizó pagos posteriores que dependen de este fiado.');
+    }
+
+    tx.update(origRef, { annulled: true, linkedMovementId: reversalRef.id });
+    tx.set(reversalRef, {
+      type: 'reversal',
+      amount: orig.amount,
+      description: 'Anulación de movimiento',
+      balanceAfter: newBalance,
+      linkedMovementId: movementId,
+      reversalReason: 'Anulación manual',
+      createdAt: serverTimestamp(),
+    });
+    tx.update(customerRef, { balance: newBalance, updatedAt: serverTimestamp() });
+  });
+}
+
 export async function registerMovement(
   businessId: string,
   customerId: string,

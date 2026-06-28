@@ -19,6 +19,7 @@ import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { importInitialProducts, declineInitialProducts } from '@/services/importInitialProducts';
+import { normalizeText } from '@/utils/text';
 import { theme } from '@/theme';
 
 export default function ProductsScreen() {
@@ -72,9 +73,9 @@ export default function ProductsScreen() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizeText(search);
     return products.filter((p) => {
-      const matchName = !q || p.name.toLowerCase().includes(q);
+      const matchName = !q || normalizeText(p.name).includes(q);
       const matchCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
       return matchName && matchCategory;
     });
@@ -86,13 +87,25 @@ export default function ProductsScreen() {
         {/* ── HEADER ── */}
         <View style={styles.header}>
           <Text style={styles.title}>Productos</Text>
-          <TouchableOpacity
-            style={styles.fab}
-            onPress={() => router.push('/products/new')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {!search.trim() && (
+              <TouchableOpacity
+                style={styles.pdfBtn}
+                onPress={() => router.push('/products/prices')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} />
+                <Text style={styles.pdfBtnText}>PDF precios</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.fab}
+              onPress={() => router.push('/products/new')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Buscar producto..." />
@@ -118,21 +131,6 @@ export default function ProductsScreen() {
             })}
           </ScrollView>
         )}
-
-        <TouchableOpacity
-          style={styles.pricesBtn}
-          onPress={() => router.push('/products/prices')}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="pricetag-outline" size={18} color={theme.colors.primary} />
-          <View style={styles.pricesBtnBody}>
-            <Text style={styles.pricesBtnTitle}>Lista de precios</Text>
-            <Text style={styles.pricesBtnSub}>
-              Generá un PDF para controlar costos y actualizar precios.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.muted} />
-        </TouchableOpacity>
 
         {loading ? (
           <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
@@ -264,31 +262,26 @@ const styles = StyleSheet.create({
   loader: { marginTop: 40 },
   list: { paddingBottom: 20 },
 
-  // ── Lista de precios ──────────────────────────────────────
-  pricesBtn: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+  },
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     backgroundColor: theme.colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    marginBottom: 12,
   },
-  pricesBtnBody: { flex: 1 },
-  pricesBtnTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  pricesBtnSub: {
-    fontSize: 12,
-    color: theme.colors.muted,
-    fontWeight: '500',
-    marginTop: 1,
-    lineHeight: 17,
+  pdfBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
   },
 
   // ── Lista inicial offer ───────────────────────────────────

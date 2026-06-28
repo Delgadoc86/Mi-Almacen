@@ -4,6 +4,7 @@ import {
   addDoc,
   updateDoc,
   getDocs,
+  runTransaction,
   query,
   where,
   orderBy,
@@ -199,5 +200,50 @@ export async function closeCashSession(
   await updateDoc(cashSessionRef(businessId, sessionId), {
     status: 'closed',
     closedAt: serverTimestamp(),
+  });
+}
+
+export async function annulCashMovement(
+  businessId: string,
+  sessionId: string,
+  movementId: string,
+): Promise<void> {
+  const sessRef = cashSessionRef(businessId, sessionId);
+  const origRef = doc(cashMovementsRef(businessId, sessionId), movementId);
+  const reversalRef = doc(cashMovementsRef(businessId, sessionId));
+
+  await runTransaction(db, async (tx) => {
+    const [origSnap, sessSnap] = await Promise.all([tx.get(origRef), tx.get(sessRef)]);
+
+    if (!origSnap.exists()) throw new Error('Movimiento no encontrado.');
+    if (!sessSnap.exists()) throw new Error('Sesión no encontrada.');
+
+    const orig = origSnap.data();
+
+    if (orig.annulled) throw new Error('Este movimiento ya fue anulado.');
+    if (orig.isReversal) throw new Error('No se puede anular una anulación.');
+
+    // Reversal is the opposite type to counter-act the original
+    const reversalType: CashMovementType = orig.type === 'ingreso' ? 'egreso' : 'ingreso';
+
+    const summaryUpdate: Record<string, ReturnType<typeof increment>> = {
+      'summary.movementsCount': increment(1),
+    };
+    if (reversalType === 'egreso') {
+      summaryUpdate['summary.totalEgresos'] = increment(orig.amount as number);
+    } else {
+      summaryUpdate['summary.totalIngresos'] = increment(orig.amount as number);
+    }
+
+    tx.update(origRef, { annulled: true, linkedMovementId: reversalRef.id });
+    tx.set(reversalRef, {
+      type: reversalType,
+      amount: orig.amount,
+      description: 'Anulación de movimiento',
+      isReversal: true,
+      linkedMovementId: movementId,
+      createdAt: serverTimestamp(),
+    });
+    tx.update(sessRef, summaryUpdate);
   });
 }

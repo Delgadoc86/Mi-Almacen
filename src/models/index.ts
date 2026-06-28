@@ -2,7 +2,7 @@ import { Timestamp } from 'firebase/firestore';
 
 export type ProductType = 'unidad' | 'pack' | 'peso';
 export type RoundTo = 1 | 5 | 10 | 50 | 100;
-export type MovementType = 'fiado' | 'pago';
+export type MovementType = 'fiado' | 'pago' | 'reversal';
 export type PaymentMethod = 'efectivo' | 'transferencia' | 'mercado_pago' | 'otro';
 
 export type Category = {
@@ -23,6 +23,8 @@ export type Product = {
   margin: number;
   roundTo: RoundTo;
   price: number;
+  suggestedPrice?: number;
+  salePrice?: number;
   // type = 'peso'
   unit?: 'kg' | 'g';
   saleUnitLabel?: string;
@@ -50,6 +52,9 @@ export type Movement = {
   description?: string;
   paymentMethod?: PaymentMethod;
   balanceAfter: number; // customer balance after this movement
+  annulled?: boolean;
+  linkedMovementId?: string;
+  reversalReason?: string;
   createdAt: Timestamp;
 };
 
@@ -82,6 +87,9 @@ export type CashMovement = {
   amount: number;
   medioPago?: PaymentMethod;
   description?: string;
+  annulled?: boolean;
+  linkedMovementId?: string;
+  isReversal?: boolean;
   createdAt: Timestamp;
 };
 

@@ -300,7 +300,7 @@ function buildCategorySection(
           <td class="col-num">${n++}</td>
           <td class="col-name">${escapeHtml(p.name)}</td>
           <td class="col-cost">${formatARS(p.cost)}</td>
-          <td class="col-price">${formatARS(p.price)}</td>
+          <td class="col-price">${formatARS(p.salePrice ?? p.price)}</td>
           <td class="col-new"></td>
         </tr>`,
     )

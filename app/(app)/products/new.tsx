@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -40,18 +39,36 @@ export default function NewProductScreen() {
   );
   const [roundTo, setRoundTo] = useState<RoundTo>(business?.defaultRoundTo ?? 1);
   const [unitsPerPack, setUnitsPerPack] = useState('');
+  const [salePrice, setSalePrice] = useState('');
+  const [salePriceEdited, setSalePriceEdited] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const costNum = parseFloat(cost) || 0;
   const marginNum = parseFloat(margin) || 0;
   const unitsNum = parseInt(unitsPerPack, 10) || 0;
-  const price = calculatePrice(
+  const suggestedPrice = calculatePrice(
     costNum,
     marginNum,
     roundTo,
     type,
     type === 'pack' ? unitsNum : undefined,
   );
+
+  useEffect(() => {
+    if (!salePriceEdited && suggestedPrice > 0) {
+      setSalePrice(String(suggestedPrice));
+    }
+  }, [suggestedPrice, salePriceEdited]);
+
+  function handleSalePriceChange(text: string) {
+    setSalePrice(text);
+    setSalePriceEdited(true);
+  }
+
+  function resetSalePrice() {
+    setSalePrice(String(suggestedPrice));
+    setSalePriceEdited(false);
+  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -76,6 +93,8 @@ export default function NewProductScreen() {
     }
     if (!userProfile?.businessId) return;
 
+    const salePriceNum = parseFloat(salePrice) || suggestedPrice;
+
     setSaving(true);
     try {
       await createProduct(userProfile.businessId, {
@@ -85,7 +104,9 @@ export default function NewProductScreen() {
         cost: costNum,
         margin: marginNum,
         roundTo,
-        price,
+        price: suggestedPrice,
+        suggestedPrice,
+        salePrice: salePriceNum,
         ...(type === 'pack' && unitsNum > 0 ? { unitsPerPack: unitsNum } : {}),
       });
       router.back();
@@ -99,7 +120,7 @@ export default function NewProductScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
     >
       <ScrollView
         style={styles.flex}
@@ -207,15 +228,34 @@ export default function NewProductScreen() {
         </View>
 
         {costNum > 0 && (
-          <View style={styles.preview}>
-            <Text style={styles.previewLabel}>Precio de venta calculado</Text>
-            <Text style={styles.previewPrice}>${price.toLocaleString('es-AR')}</Text>
-            {type === 'pack' && unitsNum > 0 && (
-              <Text style={styles.previewSub}>
-                Costo unitario: ${(costNum / unitsNum).toFixed(2)}
-              </Text>
+          <>
+            <View style={styles.preview}>
+              <Text style={styles.previewLabel}>Precio sugerido</Text>
+              <Text style={styles.previewPrice}>${suggestedPrice.toLocaleString('es-AR')}</Text>
+              {type === 'pack' && unitsNum > 0 && (
+                <Text style={styles.previewSub}>
+                  Costo unitario: ${(costNum / unitsNum).toFixed(2)}
+                </Text>
+              )}
+            </View>
+
+            <Text style={styles.fieldLabel}>Precio de venta *</Text>
+            <TextInput
+              style={styles.input}
+              value={salePrice}
+              onChangeText={handleSalePriceChange}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={theme.colors.muted}
+            />
+            {salePriceEdited && suggestedPrice > 0 && (
+              <TouchableOpacity style={styles.resetBtn} onPress={resetSalePrice} activeOpacity={0.7}>
+                <Text style={styles.resetBtnText}>
+                  Usar precio sugerido (${suggestedPrice.toLocaleString('es-AR')})
+                </Text>
+              </TouchableOpacity>
             )}
-          </View>
+          </>
         )}
 
         <TouchableOpacity
@@ -240,7 +280,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 48,
+    paddingBottom: 100,
   },
   fieldLabel: {
     fontSize: 13,
@@ -330,6 +370,20 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     marginTop: 4,
     fontWeight: '500',
+  },
+  resetBtn: {
+    alignSelf: 'flex-start',
+    marginTop: -8,
+    marginBottom: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: theme.colors.primaryMid,
+  },
+  resetBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
   saveBtn: {
     marginTop: 8,

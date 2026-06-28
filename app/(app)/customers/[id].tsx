@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCustomer } from '@/hooks/useCustomer';
 import { useCustomerMovements } from '@/hooks/useCustomerMovements';
 import { useCashSession } from '@/hooks/useCashSession';
-import { registerMovement } from '@/services/customers';
+import { registerMovement, annulMovement } from '@/services/customers';
 import { MovementItem } from '@/components/MovementItem';
 import { theme } from '@/theme';
 import type { MovementType, PaymentMethod } from '@/models';
@@ -53,6 +54,16 @@ export default function CustomerDetailScreen() {
     setAmount('');
     setDescription('');
     setPaymentMethod('efectivo');
+  }
+
+  async function handleAnnul(movementId: string) {
+    if (!userProfile?.businessId || !id) return;
+    try {
+      await annulMovement(userProfile.businessId, id, movementId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo anular el movimiento.';
+      Alert.alert('Error', msg);
+    }
   }
 
   async function handleConfirm() {
@@ -124,6 +135,10 @@ export default function CustomerDetailScreen() {
         }}
       />
 
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior="padding"
+      >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -276,9 +291,12 @@ export default function CustomerDetailScreen() {
         ) : movements.length === 0 ? (
           <Text style={styles.emptyHistory}>Sin movimientos registrados.</Text>
         ) : (
-          movements.map((m) => <MovementItem key={m.id} movement={m} />)
+          movements.map((m) => (
+            <MovementItem key={m.id} movement={m} onAnnul={() => handleAnnul(m.id)} />
+          ))
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 }
@@ -294,13 +312,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textSecondary,
   },
+  flex: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
   scroll: {
     flex: 1,
     backgroundColor: theme.colors.background,
   },
   content: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   balanceCard: {
     borderRadius: 20,

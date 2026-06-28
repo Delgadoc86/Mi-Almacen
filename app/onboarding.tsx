@@ -37,8 +37,8 @@ const STEPS: Step[] = [
     icon: 'cube-outline',
   },
   {
-    title: 'Generá tu lista de precios',
-    desc: 'Compartí el PDF con tus clientes cuando lo necesiten.',
+    title: 'Controlá tu lista de precios',
+    desc: 'Generá tu catálogo en PDF agrupado por categoría. Tu herramienta para tener los precios siempre al día.',
     icon: 'pricetag-outline',
   },
 ];
