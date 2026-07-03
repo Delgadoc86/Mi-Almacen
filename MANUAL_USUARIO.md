@@ -1,6 +1,6 @@
 # Manual del Usuario — Mi Almacén
 
-**Versión 1.1.2**
+**Versión 1.3.0**
 Aplicación de gestión para almacenes, kioscos y despensas.
 
 ---
@@ -186,13 +186,14 @@ La lista de precios es accesible desde la pestaña **Productos**, tocando el bot
 
 1. Ir a la pestaña **Productos**.
 2. Tocar **Lista de precios**.
-3. Ver la cantidad de productos que se incluirán.
-4. Tocar **Generar lista**.
-5. Una vez generada, elegir **Abrir PDF**, **Imprimir** o **Compartir PDF** (WhatsApp, email, Drive, etc.).
+3. (Opcional) Elegir una categoría en el selector de arriba para imprimir solo esa sección — por ejemplo, reimprimir únicamente "Bebidas" sin generar todo el catálogo de nuevo. Por defecto está seleccionado **Todas las categorías**.
+4. Ver la cantidad de productos que se incluirán.
+5. Tocar **Generar lista**.
+6. Una vez generada, elegir **Abrir PDF**, **Imprimir** o **Compartir PDF** (WhatsApp, email, Drive, etc.).
 
-El PDF incluye todos los productos ordenados por categoría, con nombre, costo y precio de venta.
+El PDF incluye los productos ordenados por categoría, con nombre, costo y precio de venta, en letra grande para encontrar productos rápido.
 
-> **Nota:** Si no hay productos cargados, la lista no estará disponible. Primero cargue productos desde la pestaña **Productos**.
+> **Nota:** Si no hay productos cargados, la lista no estará disponible. Primero cargue productos desde la pestaña **Productos**. Si elige una categoría sin productos, la aplicación se lo va a avisar antes de generar el PDF.
 
 ---
 

@@ -983,3 +983,62 @@ El archivo `app/(app)/(tabs)/pdf.tsx` se mantiene con `href: null` para suprimir
 
 ID `fiambreria`, `order: 9`, desplaza a `otros` a `order: 10`. Se elige como categoría del sistema (no personalizada) porque los almacenes y despensas de barrio típicamente tienen una sección de fiambrería — es tan estructural como las otras 9.
 
+---
+
+## Fase 15 — Rediseño UI/UX
+
+### Alcance: solo presentación
+
+El rediseño no tocó `src/services/`, `src/hooks/`, `src/models/`, reglas de Firestore ni la estructura de rutas de `app/`. Cada handler mantiene la misma firma y lógica interna — solo cambió qué componente visual lo invoca. Verificado con `tsc --noEmit` limpio en cada fase y con `expo export --platform android`, que empaquetó los 1111 módulos del bundle sin errores.
+
+### Por qué una paleta propia y no Material Design genérico
+
+El theme original (`#1D4ED8` azul Tailwind genérico) no comunicaba una identidad propia. Se definió:
+- **Primary `#0F4C81`** ("Azul Puerto") — sigue leyéndose como confianza/banca, pero es más distintivo que un azul de librería.
+- **Accent `#C2542D`** ("Terracota Almacén") — cálido, evoca los toldos de un comercio de barrio. Uso puntual (FABs, íconos hero), nunca como color de acción repetida, para no diluir la jerarquía visual.
+- Semánticos (`success`, `warning`, `error`) reformulados en la misma familia tonal. Se corrigió un bug del theme original: `accent` y `warning` eran el mismo hex (`#F59E0B`), ahora son tokens independientes.
+
+### Por qué Manrope y no la fuente del sistema
+
+El theme original no cargaba ninguna fuente custom (`theme.font` definía tamaños pero nada de tipografía). Manrope se eligió por sus numerales tabulares — crítico porque el dinero (precios, saldos, deuda) es el elemento tipográfico dominante en casi toda pantalla — y porque es geométrica pero cálida, no fría como una fuente corporativa. Se carga una vez en `app/_layout.tsx` con `useFonts` como condición adicional al gate de loading que ya existía para el estado de auth (`RootGuard`), sin tocar la lógica de redirección.
+
+### Por qué una librería de componentes nueva y no solo re-temear
+
+La auditoría previa al rediseño encontró que `theme.spacing`, `theme.radius` y `theme.font` casi no se usaban en el código — cada pantalla hardcodeaba sus propios números (radios de botón en 4 valores distintos, 3 variantes de chip con dimensiones distintas, sombra `#0F172A` repetida como literal en más de 15 lugares). Tampoco existía ningún `Button`, `Input`, `Card`, `Modal` o `Chip` compartido: solo 8 componentes en `src/components/`, 2 de ellos (`ScreenContainer`, `SectionHeader`) sin ningún uso real — se eliminaron como código muerto.
+
+Se creó `src/components/ui/` con 12 primitivas (`Button`, `TextField`, `Card`, `Chip`, `IconChip`, `InlineMessage`, `ListRow`, `AmountDisplay`, `ConfirmDialog`, `Toast`, `ScreenHeader`, más un módulo de tipos compartido) que consolidan los patrones duplicados encontrados. Cada pantalla fue migrada para usarlas en lugar de recrear estilos inline.
+
+### `Alert.alert` reemplazado por `ConfirmDialog` propio
+
+Todas las confirmaciones destructivas usaban el `Alert.alert` nativo del sistema operativo — sin control de estilo, inconsistente con la identidad nueva. Se creó `ConfirmDialog` (usa `Modal` de React Native) y se aplicó en los puntos de confirmación: anular movimiento de fiado, anular movimiento de caja, reabrir caja, eliminar categoría, eliminar producto, eliminar cliente, cerrar sesión, eliminar cuenta (2 pasos). El cambio es puramente de mecanismo de UI: mismo `onConfirm`/`onCancel`, mismo comportamiento de negocio — antes invocado imperativamente con `Alert.alert(...)`, ahora declarativo con `<ConfirmDialog visible={} .../>` y un `useState` local por pantalla.
+
+En `MovementItem` y `cash/movements.tsx` existía además una acción-sheet previa ("Opciones" → "Anular movimiento") con una sola opción real — se colapsó a un solo `ConfirmDialog` directo al tocar el ícono de menú, eliminando un paso redundante.
+
+Dos casos (eliminar cliente en `customers/[id]/edit.tsx` y cerrar sesión en `settings.tsx`) no tenían ninguna confirmación previa — se agregó `ConfirmDialog` como red de seguridad mínima ante una acción irreversible, consistente con el resto de la app.
+
+### Sin dependencias de animación nuevas
+
+`react-native-reanimated` no estaba instalado. Las microinteracciones (feedback de presión en `Button`, fade del `Toast`) usan `Animated` built-in de React Native — deliberadamente liviano, sin sumar dependencias nuevas.
+
+### Splash e ícono adaptativo alineados a la paleta
+
+`app.config.ts` tenía `splash.backgroundColor: '#F8FAFB'` y `android.adaptiveIcon.backgroundColor: '#E6F4FE'` — ambos ligeramente distintos del `background`/`primaryLight` del theme, sin relación con ningún token. Se alinearon a `#F5F7FA` y `#E9F1FA` respectivamente para que la primera impresión (splash + ícono) sea coherente con la identidad nueva.
+
+---
+
+## Fase 16 — Mejoras a la Lista de precios (post-Fase 5)
+
+### Tipografía más grande
+
+La escala automática de `pdfTemplate.ts` (`getSv()`, 3 niveles según cantidad de productos) tenía el nombre del producto en 13pt/11pt/9.5pt según el tamaño del catálogo. Reportado como difícil de leer para el público objetivo (40-70 años, necesitan encontrar un producto rápido en el mostrador). Se subió toda la escala — el nombre del producto ahora es 16pt/14.5pt/13pt — priorizando legibilidad sobre entrar en menos páginas impresas.
+
+### Selector de categoría — por qué no se tocó la lógica de agrupación del PDF
+
+`buildPdfHtml()` ya agrupaba productos por `categoryId` iterando sobre el array `categories` recibido. Para poder reimprimir una sola categoría no hizo falta ninguna lógica nueva en el generador: la pantalla `products/prices.tsx` filtra `products` y `categories` a la selección del usuario **antes** de llamar a `buildPdfHtml`, y la función construye naturalmente un PDF de una sola sección. Se agregó un parámetro opcional `filterCategoryName` solo para mostrar "Categoría: Bebidas" en el encabezado del documento en vez de "N categorías" cuando hay un filtro activo.
+
+`generatePdfFilename` acepta ahora un segundo parámetro opcional `categoryName` — el archivo generado para una categoría filtrada queda como `{Negocio}_{Categoría}_{fecha}.pdf` en lugar de `{Negocio}_Control_Precios_{fecha}.pdf`, para que quede identificable si se comparte o reimprime más tarde.
+
+### PDF con paleta de marca
+
+La plantilla HTML/CSS del PDF tenía su propia paleta hardcodeada (`#1D4ED8`, `#111827`, `#6B7280`…), desconectada del `theme` de la app — encontrado en la auditoría del rediseño de Fase 15 pero dejado fuera de esa fase a propósito por ser HTML de impresión, no componentes de React Native. Se resolvió importando `theme` directamente en `pdfTemplate.ts` y referenciando `theme.colors.*` en el CSS generado, en vez de duplicar hex codes. Se mantuvo la tipografía del sistema (Arial/Helvetica) en lugar de Manrope: incrustar una fuente custom en HTML impreso vía `expo-print` requeriría empaquetarla como base64 dentro del documento, un riesgo de compatibilidad innecesario para un archivo que se comparte por WhatsApp o se imprime desde impresoras caseras.
+

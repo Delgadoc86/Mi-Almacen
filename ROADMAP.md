@@ -97,6 +97,19 @@
 - Lista de precios movida como pantalla Stack dentro de Productos (`/products/prices`)
 - Acceso desde un botón compacto siempre visible en la pantalla Productos
 
+## ✅ Fase 15 — Rediseño UI/UX
+- Identidad visual propia sin modificar lógica de negocio, Firebase ni navegación
+- Paleta de marca (Azul Puerto + Terracota Almacén), tipografía Manrope, escala tipográfica más grande
+- Sistema de componentes reutilizables en `src/components/ui/` (Button, TextField, Card, Chip, IconChip, InlineMessage, ListRow, AmountDisplay, ConfirmDialog, Toast, ScreenHeader)
+- `Alert.alert` nativo reemplazado por `ConfirmDialog` propio en todas las confirmaciones destructivas
+- Código muerto eliminado (`ScreenContainer`, `SectionHeader`, sin uso real)
+- Splash e ícono adaptativo alineados a la paleta nueva
+
+## ✅ Fase 16 — Mejoras a la Lista de precios
+- Tipografía más grande en el PDF (nombre de producto y precios) para lectura rápida
+- Selector de categoría: generar el catálogo completo (default) o reimprimir una sola categoría
+- Plantilla del PDF alineada a la paleta de marca en lugar de colores propios desconectados del theme
+
 ## 🔲 Por definir
 - Estadísticas y reportes
 - Notificaciones push (recordatorios de deuda)

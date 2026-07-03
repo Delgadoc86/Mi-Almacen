@@ -1,19 +1,11 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCashSession } from '@/hooks/useCashSession';
 import { closeCashSession } from '@/services/cash';
 import { theme } from '@/theme';
-import type { CashSession } from '@/models';
+import { AmountDisplay, Button, Card, InlineMessage } from '@/components/ui';
 
 function formatARS(amount: number): string {
   return '$' + Math.round(amount).toLocaleString('es-AR');
@@ -85,8 +77,7 @@ export default function CloseCashScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Resumen */}
-      <View style={styles.card}>
+      <Card style={styles.card} variant="elevated">
         <SummaryRow label="Saldo inicial" value={formatARS(openingBalance)} />
 
         <Divider />
@@ -109,9 +100,7 @@ export default function CloseCashScreen() {
         <Divider />
         <View style={styles.cajonBlock}>
           <Text style={styles.cajonLabel}>Efectivo en cajón</Text>
-          <Text style={[styles.cajonValue, efectivoEnCajon < 0 && styles.textDanger]}>
-            {formatARS(efectivoEnCajon)}
-          </Text>
+          <AmountDisplay value={efectivoEnCajon} size="lg" tone={efectivoEnCajon < 0 ? 'danger' : 'success'} />
           <Text style={styles.cajonNote}>
             (saldo inicial + efectivo cobrado − gastos)
           </Text>
@@ -123,34 +112,21 @@ export default function CloseCashScreen() {
             {formatARS(saldoTotal)}
           </Text>
         </View>
-      </View>
+      </Card>
 
       <Text style={styles.movCount}>
         {summary.movementsCount} {summary.movementsCount === 1 ? 'movimiento' : 'movimientos'} registrados
       </Text>
 
-      {error ? (
-        <View style={styles.errorBox}>
-          <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
+      {error ? <InlineMessage variant="error" text={error} style={styles.errorBox} /> : null}
 
-      <TouchableOpacity
-        style={[styles.confirmBtn, closing && styles.btnDisabled]}
+      <Button
+        label="CONFIRMAR CIERRE"
+        icon="lock-closed"
         onPress={handleConfirm}
-        disabled={closing}
-        activeOpacity={0.85}
-      >
-        {closing ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <>
-            <Ionicons name="lock-closed" size={20} color="#fff" />
-            <Text style={styles.confirmBtnText}>CONFIRMAR CIERRE</Text>
-          </>
-        )}
-      </TouchableOpacity>
+        loading={closing}
+        style={styles.confirmBtn}
+      />
 
       <Text style={styles.closeNote}>
         Los datos quedan guardados. Si cerrás por error, podés reabrir la caja.
@@ -162,8 +138,8 @@ export default function CloseCashScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xl,
     paddingBottom: 48,
   },
   centerFallback: {
@@ -173,20 +149,17 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   fallbackText: {
-    fontSize: 16,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.textSecondary,
   },
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 20,
-    marginBottom: 16,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     letterSpacing: 1,
     marginBottom: 4,
@@ -199,17 +172,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   rowLabel: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
   },
-  rowLabelBold: { fontWeight: '700', color: theme.colors.text },
+  rowLabelBold: { fontFamily: theme.fontFamily.bold, color: theme.colors.text },
   rowValue: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.body,
     color: theme.colors.text,
   },
-  rowValueBold: { fontSize: 15, fontWeight: '800' },
+  rowValueBold: { fontFamily: theme.fontFamily.extrabold, fontSize: theme.font.bodyLg },
   divider: {
     height: 1,
     backgroundColor: theme.colors.divider,
@@ -217,27 +190,22 @@ const styles = StyleSheet.create({
   },
   cajonBlock: {
     backgroundColor: theme.colors.successLight,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 8,
   },
   cajonLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: theme.colors.success,
     letterSpacing: 0.3,
     marginBottom: 4,
   },
-  cajonValue: {
-    fontSize: 40,
-    fontWeight: '800',
-    color: theme.colors.success,
-    letterSpacing: -1,
-  },
   cajonNote: {
-    fontSize: 11,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     marginTop: 4,
     textAlign: 'center',
@@ -249,66 +217,31 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   totalLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.body,
     color: theme.colors.textSecondary,
   },
   totalValue: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h3,
     color: theme.colors.text,
   },
   movCount: {
-    fontSize: 13,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
     color: theme.colors.muted,
-    fontWeight: '500',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: theme.spacing.xl,
   },
   errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
+    marginBottom: theme.spacing.lg,
   },
   confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 18,
-    minHeight: 56,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 4,
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
-  confirmBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  btnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
   closeNote: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     textAlign: 'center',
     lineHeight: 18,

@@ -1,12 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +8,7 @@ import { CustomerCard } from '@/components/CustomerCard';
 import { EmptyState } from '@/components/EmptyState';
 import { useCustomers } from '@/hooks/useCustomers';
 import { theme } from '@/theme';
+import { AmountDisplay, ScreenHeader } from '@/components/ui';
 
 export default function CustomersScreen() {
   const router = useRouter();
@@ -45,25 +39,24 @@ export default function CustomersScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
-        {/* ── HEADER ── */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Fiados</Text>
-          <TouchableOpacity
-            style={styles.fab}
-            onPress={() => router.push('/customers/new')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          title="Fiados"
+          right={
+            <TouchableOpacity
+              style={styles.fab}
+              onPress={() => router.push('/customers/new')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={24} color="#fff" />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.headerSpacer} />
 
-        {/* ── SUMMARY ── */}
         {!loading && customers.length > 0 && (
           <View style={[styles.summaryCard, totalDebt > 0 ? styles.summaryCardDebt : styles.summaryCardOk]}>
             <View style={styles.summaryLeft}>
-              <Text style={[styles.summaryAmount, totalDebt > 0 ? styles.amountDanger : styles.amountOk]}>
-                ${totalDebt.toLocaleString('es-AR')}
-              </Text>
+              <AmountDisplay value={totalDebt} tone={totalDebt > 0 ? 'danger' : 'success'} />
               <Text style={styles.summaryMainLabel}>pendiente total</Text>
             </View>
             <View style={styles.summarySep} />
@@ -125,47 +118,32 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xl,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: theme.colors.text,
-    letterSpacing: -0.5,
-  },
+  headerSpacer: { height: theme.spacing.md },
   fab: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.accent,
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: theme.colors.primary,
+    shadowColor: theme.colors.accent,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.28,
     shadowRadius: 6,
     elevation: 3,
   },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 20,
+    borderRadius: theme.radius.cardLg,
     borderWidth: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginBottom: 14,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.xl,
+    marginBottom: theme.spacing.md,
+    ...theme.shadow.md,
   },
   summaryCardDebt: {
     backgroundColor: theme.colors.dangerLight,
@@ -176,14 +154,9 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.successMid,
   },
   summaryLeft: { flex: 1 },
-  summaryAmount: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
   summaryMainLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -193,22 +166,22 @@ const styles = StyleSheet.create({
     width: 1,
     height: 36,
     backgroundColor: theme.colors.divider,
-    marginHorizontal: 16,
+    marginHorizontal: theme.spacing.lg,
   },
   summaryRight: { alignItems: 'flex-end' },
   summaryStatLine: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h2,
     letterSpacing: -0.3,
   },
   summaryStatSub: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     marginTop: 2,
   },
   amountDanger: { color: theme.colors.error },
   amountOk: { color: theme.colors.success },
   loader: { marginTop: 40 },
-  list: { paddingBottom: 20 },
+  list: { paddingBottom: theme.spacing.xl },
 });

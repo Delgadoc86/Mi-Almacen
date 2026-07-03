@@ -47,17 +47,13 @@ export function CustomerCard({ customer, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 16,
+    borderRadius: theme.radius.card,
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    ...theme.shadow.sm,
   },
   row: {
     flexDirection: 'row',
@@ -65,9 +61,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: theme.iconChipSize.md,
+    height: theme.iconChipSize.md,
+    borderRadius: theme.iconChipSize.md / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -78,8 +74,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.successMid,
   },
   avatarText: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.bodyLg,
   },
   avatarTextDebt: {
     color: theme.colors.error,
@@ -91,24 +87,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.text,
     marginBottom: 2,
     letterSpacing: -0.2,
   },
   sub: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '500',
   },
   balanceBlock: {
     alignItems: 'flex-end',
     gap: 4,
   },
   balance: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h3,
     letterSpacing: -0.5,
   },
   balanceDebt: {
@@ -118,7 +114,7 @@ const styles = StyleSheet.create({
     color: theme.colors.success,
   },
   statusPill: {
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
@@ -129,8 +125,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.successLight,
   },
   statusText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },

@@ -1,20 +1,10 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { createCustomer } from '@/services/customers';
 import { theme } from '@/theme';
+import { Button, InlineMessage, TextField } from '@/components/ui';
 
 export default function NewCustomerScreen() {
   const router = useRouter();
@@ -60,73 +50,48 @@ export default function NewCustomerScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior="padding"
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.fieldLabel}>Nombre *</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Nombre *"
           value={name}
           onChangeText={(t) => { setName(t); setError(''); }}
           placeholder="Ej: Juan Pérez"
-          placeholderTextColor={theme.colors.muted}
-          maxLength={60}
           autoCapitalize="words"
           returnKeyType="next"
           autoFocus
+          containerStyle={styles.field}
         />
 
-        <Text style={styles.fieldLabel}>Teléfono (opcional)</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Teléfono (opcional)"
           value={phone}
           onChangeText={setPhone}
           placeholder="Ej: 11 2345-6789"
-          placeholderTextColor={theme.colors.muted}
           keyboardType="phone-pad"
-          maxLength={20}
           returnKeyType="next"
+          containerStyle={styles.field}
         />
 
-        <Text style={styles.fieldLabel}>Referencia / nota (opcional)</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Referencia / nota (opcional)"
           value={reference}
           onChangeText={setReference}
           placeholder="Ej: Doña Pocha, vecina de la esquina"
-          placeholderTextColor={theme.colors.muted}
-          maxLength={80}
           autoCapitalize="sentences"
           returnKeyType="done"
           onSubmitEditing={handleSave}
+          containerStyle={styles.field}
         />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <InlineMessage variant="error" text={error} style={styles.field} /> : null}
 
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && styles.btnDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.saveBtnText}>Guardar cliente</Text>
-          )}
-        </TouchableOpacity>
+        <Button label="Guardar cliente" onPress={handleSave} loading={saving} style={styles.saveBtn} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -135,65 +100,14 @@ export default function NewCustomerScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xxl,
     paddingBottom: 100,
   },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    marginBottom: 7,
-    letterSpacing: 0.2,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
+  field: {
+    marginBottom: theme.spacing.lg,
   },
   saveBtn: {
     marginTop: 8,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 17,
-    alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-    minHeight: 54,
-    justifyContent: 'center',
-  },
-  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
   },
 });

@@ -16,6 +16,8 @@ import { createCategory, deleteCategory } from '@/services/categories';
 import { getCategoryProductCount } from '@/services/products';
 import { DEFAULT_CATEGORY_IDS } from '@/constants';
 import { theme } from '@/theme';
+import { ConfirmDialog } from '@/components/ui';
+import { EmptyState } from '@/components/EmptyState';
 import type { Category } from '@/models';
 
 export default function CategoriesScreen() {
@@ -24,6 +26,7 @@ export default function CategoriesScreen() {
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
 
   async function handleAdd() {
     const trimmed = newName.trim();
@@ -43,7 +46,7 @@ export default function CategoriesScreen() {
     }
   }
 
-  async function handleDelete(cat: Category) {
+  async function handleRequestDelete(cat: Category) {
     if (!userProfile?.businessId) return;
     const bizId = userProfile.businessId;
 
@@ -63,23 +66,21 @@ export default function CategoriesScreen() {
       return;
     }
 
-    Alert.alert('Eliminar categoría', `¿Eliminar "${cat.name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          setDeletingId(cat.id);
-          try {
-            await deleteCategory(bizId, cat.id);
-          } catch {
-            Alert.alert('Error', 'No se pudo eliminar. Intentá de nuevo.');
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      },
-    ]);
+    setPendingDelete(cat);
+  }
+
+  async function handleConfirmDelete() {
+    if (!userProfile?.businessId || !pendingDelete) return;
+    const cat = pendingDelete;
+    setPendingDelete(null);
+    setDeletingId(cat.id);
+    try {
+      await deleteCategory(userProfile.businessId, cat.id);
+    } catch {
+      Alert.alert('Error', 'No se pudo eliminar. Intentá de nuevo.');
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function renderCategory({ item }: { item: Category }) {
@@ -95,7 +96,7 @@ export default function CategoriesScreen() {
           <ActivityIndicator size="small" color={theme.colors.error} />
         ) : (
           <TouchableOpacity
-            onPress={() => handleDelete(item)}
+            onPress={() => handleRequestDelete(item)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
@@ -142,10 +143,20 @@ export default function CategoriesScreen() {
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={
-            <Text style={styles.empty}>No hay categorías todavía.</Text>
+            <EmptyState icon="pricetags-outline" title="No hay categorías todavía" />
           }
         />
       )}
+
+      <ConfirmDialog
+        visible={!!pendingDelete}
+        title="Eliminar categoría"
+        message={pendingDelete ? `¿Eliminar "${pendingDelete.name}"?` : undefined}
+        confirmLabel="Eliminar"
+        variant="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </View>
   );
 }
@@ -158,7 +169,7 @@ const styles = StyleSheet.create({
   addBar: {
     flexDirection: 'row',
     gap: 10,
-    padding: 16,
+    padding: theme.spacing.lg,
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
@@ -168,15 +179,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: 10,
+    borderRadius: theme.radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 16,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.text,
   },
   addBtn: {
     backgroundColor: theme.colors.primary,
-    borderRadius: 10,
+    borderRadius: theme.radius.md,
     width: 46,
     height: 46,
     alignItems: 'center',
@@ -189,29 +201,27 @@ const styles = StyleSheet.create({
     marginTop: 48,
   },
   list: {
-    padding: 16,
+    padding: theme.spacing.lg,
+    flexGrow: 1,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: theme.colors.surface,
-    borderRadius: 10,
+    borderRadius: theme.radius.md,
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   rowName: {
-    fontSize: 16,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.text,
     flex: 1,
   },
   separator: {
     height: 8,
-  },
-  empty: {
-    textAlign: 'center',
-    color: theme.colors.muted,
-    marginTop: 32,
-    fontSize: 15,
   },
 });

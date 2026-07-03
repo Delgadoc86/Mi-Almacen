@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: 14,
+    borderRadius: theme.radius.input,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
     paddingHorizontal: 14,
@@ -51,9 +51,9 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.text,
-    fontWeight: '500',
     padding: 0,
   },
 });

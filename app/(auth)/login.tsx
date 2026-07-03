@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
+import { Button, IconChip, InlineMessage, TextField } from '@/components/ui';
 
 const BIOMETRIC_EMAIL_KEY = 'biometric_user_email';
 
@@ -40,7 +40,6 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generalError, setGeneralError] = useState('');
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -151,30 +150,24 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── BRANDING ── */}
         <View style={styles.brandSection}>
-          <View style={styles.logoWrap}>
-            <Ionicons name="storefront" size={30} color={theme.colors.primary} />
-          </View>
+          <IconChip icon="storefront" size="lg" tone="primary" />
           <Text style={styles.title}>Mi Almacén</Text>
           <Text style={styles.subtitle}>Controlá precios y fiados de tu comercio</Text>
         </View>
 
         {!showForgot ? (
-          /* ── LOGIN FORM ── */
           <View style={styles.form}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label="Email"
               value={email}
               onChangeText={(t) => { setEmail(t); setGeneralError(''); }}
               placeholder="tucorreo@ejemplo.com"
-              placeholderTextColor={theme.colors.muted}
               keyboardType="email-address"
               autoCapitalize="none"
-              autoCorrect={false}
               returnKeyType="next"
               onSubmitEditing={() => passwordRef.current?.focus()}
+              containerStyle={styles.field}
             />
 
             <View style={styles.passwordLabelRow}>
@@ -183,36 +176,19 @@ export default function LoginScreen() {
                 <Text style={styles.forgotLink}>Olvidé mi contraseña</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.inputWrap}>
-              <TextInput
-                ref={passwordRef}
-                style={styles.inputInner}
-                value={password}
-                onChangeText={(t) => { setPassword(t); setGeneralError(''); }}
-                placeholder="••••••••"
-                placeholderTextColor={theme.colors.muted}
-                secureTextEntry={!showPassword}
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowPassword((p) => !p)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={theme.colors.muted}
-                />
-              </TouchableOpacity>
-            </View>
+            <TextField
+              ref={passwordRef}
+              value={password}
+              onChangeText={(t) => { setPassword(t); setGeneralError(''); }}
+              placeholder="••••••••"
+              secureTextEntry
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+              containerStyle={styles.field}
+            />
 
             {generalError ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-                <Text style={styles.errorText}>{generalError}</Text>
-              </View>
+              <InlineMessage variant="error" text={generalError} style={styles.field} />
             ) : null}
 
             {failedAttempts >= 3 && (
@@ -227,88 +203,62 @@ export default function LoginScreen() {
               </View>
             )}
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, loading && styles.btnDisabled]}
+            <Button
+              label="Entrar"
               onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Entrar</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              style={styles.field}
+            />
 
             {biometricAvailable && (
-              <TouchableOpacity
-                style={[styles.biometricBtn, biometricLoading && styles.btnDisabled]}
+              <Button
+                label="Entrar con huella"
+                variant="outline"
+                icon="finger-print-outline"
                 onPress={handleBiometric}
-                disabled={biometricLoading}
-                activeOpacity={0.85}
-              >
-                {biometricLoading ? (
-                  <ActivityIndicator color={theme.colors.primary} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="finger-print-outline" size={20} color={theme.colors.primary} />
-                    <Text style={styles.biometricBtnText}>Entrar con huella</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                loading={biometricLoading}
+              />
             )}
           </View>
         ) : (
-          /* ── FORGOT PASSWORD FORM ── */
           <View style={styles.form}>
             <Text style={styles.forgotTitle}>Recuperar contraseña</Text>
             <Text style={styles.forgotSubtitle}>
               Ingresá tu email y te enviamos un correo para restablecer la contraseña.
             </Text>
 
-            <Text style={styles.fieldLabel}>Email</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label="Email"
               value={forgotEmail}
               onChangeText={(t) => { setForgotEmail(t); setForgotError(''); setForgotSuccess(false); }}
               placeholder="tucorreo@ejemplo.com"
-              placeholderTextColor={theme.colors.muted}
               keyboardType="email-address"
               autoCapitalize="none"
-              autoCorrect={false}
               returnKeyType="done"
               onSubmitEditing={handleForgotPassword}
               autoFocus
+              containerStyle={styles.field}
             />
 
             {forgotError ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-                <Text style={styles.errorText}>{forgotError}</Text>
-              </View>
+              <InlineMessage variant="error" text={forgotError} style={styles.field} />
             ) : null}
 
             {forgotSuccess ? (
-              <View style={styles.successBox}>
-                <Ionicons name="checkmark-circle-outline" size={15} color={theme.colors.success} />
-                <Text style={styles.successText}>
-                  Correo enviado. Revisá tu bandeja de entrada (y la carpeta de spam).
-                </Text>
-              </View>
+              <InlineMessage
+                variant="success"
+                text="Correo enviado. Revisá tu bandeja de entrada (y la carpeta de spam)."
+                style={styles.field}
+              />
             ) : null}
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, (forgotLoading || forgotSuccess) && styles.btnDisabled]}
+            <Button
+              label="Enviar correo de recuperación"
               onPress={handleForgotPassword}
-              disabled={forgotLoading || forgotSuccess}
-              activeOpacity={0.85}
-            >
-              {forgotLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Enviar correo de recuperación</Text>
-              )}
-            </TouchableOpacity>
+              loading={forgotLoading}
+              disabled={forgotSuccess}
+              style={styles.field}
+            />
 
             <TouchableOpacity
               style={styles.backBtn}
@@ -320,7 +270,6 @@ export default function LoginScreen() {
           </View>
         )}
 
-        {/* ── FOOTER ── */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>¿No tenés cuenta? </Text>
           <TouchableOpacity onPress={() => router.push('/register')}>
@@ -336,131 +285,50 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xxl,
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: theme.spacing.huge,
     justifyContent: 'center',
   },
   brandSection: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 3,
+    marginBottom: theme.spacing.huge,
+    gap: theme.spacing.md,
   },
   title: {
+    fontFamily: theme.fontFamily.extrabold,
     fontSize: 32,
-    fontWeight: '800',
     color: theme.colors.text,
     letterSpacing: -0.5,
-    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 15,
-    color: theme.colors.muted,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
+    color: theme.colors.textSecondary,
     textAlign: 'center',
-    fontWeight: '500',
   },
   form: {
     width: '100%',
   },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    marginBottom: 7,
-    letterSpacing: 0.2,
+  field: {
+    marginBottom: theme.spacing.lg,
   },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 16,
+  fieldLabel: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.2,
   },
   passwordLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 7,
+    marginBottom: 8,
   },
   forgotLink: {
-    fontSize: 13,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
     color: theme.colors.primary,
-    fontWeight: '600',
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  inputInner: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  eyeBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.successLight,
-    borderWidth: 1,
-    borderColor: theme.colors.successMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  successText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.success,
-    fontWeight: '500',
-    lineHeight: 18,
   },
   hintBox: {
     flexDirection: 'row',
@@ -468,102 +336,64 @@ const styles = StyleSheet.create({
     gap: 7,
     backgroundColor: theme.colors.warningLight,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 10,
+    borderColor: theme.colors.warningBorder,
+    borderRadius: theme.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
   hintText: {
     flex: 1,
-    fontSize: 13,
-    color: '#92400E',
-    fontWeight: '500',
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
+    color: theme.colors.warning,
     lineHeight: 18,
   },
   hintLink: {
     color: theme.colors.primary,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
     textDecorationLine: 'underline',
   },
-  primaryBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 17,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-    minHeight: 54,
-    justifyContent: 'center',
-  },
-  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
-  primaryBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  biometricBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 16,
-    paddingVertical: 15,
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
-    marginBottom: 12,
-    minHeight: 52,
-  },
-  biometricBtnText: {
-    color: theme.colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
   forgotTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h2,
     color: theme.colors.text,
     letterSpacing: -0.3,
     marginBottom: 8,
   },
   forgotSubtitle: {
-    fontSize: 14,
-    color: theme.colors.muted,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
+    color: theme.colors.textSecondary,
     lineHeight: 20,
-    marginBottom: 24,
-    fontWeight: '500',
+    marginBottom: theme.spacing.xxl,
   },
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 14,
+    paddingVertical: theme.spacing.lg,
   },
   backBtnText: {
     color: theme.colors.primary,
-    fontSize: 15,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.body,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: theme.spacing.xxxl,
   },
   footerText: {
-    fontSize: 15,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.muted,
-    fontWeight: '500',
   },
   footerLink: {
-    fontSize: 15,
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.body,
     color: theme.colors.primary,
-    fontWeight: '700',
   },
 });

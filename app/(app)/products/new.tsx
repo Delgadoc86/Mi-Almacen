@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,6 +15,7 @@ import { createProduct } from '@/services/products';
 import { calculatePrice } from '@/utils/pricing';
 import { ROUND_OPTIONS } from '@/constants';
 import { theme } from '@/theme';
+import { AmountDisplay, Button, Card, Chip, TextField } from '@/components/ui';
 import type { ProductType, RoundTo } from '@/models';
 
 const TYPE_OPTIONS: { label: string; value: ProductType }[] = [
@@ -118,41 +117,32 @@ export default function NewProductScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior="padding"
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.fieldLabel}>Nombre *</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Nombre *"
           value={name}
           onChangeText={setName}
           placeholder="Ej: Aceite Natura 1 lt"
-          placeholderTextColor={theme.colors.muted}
-          maxLength={80}
           autoCapitalize="sentences"
           returnKeyType="next"
+          containerStyle={styles.field}
         />
 
         <Text style={styles.fieldLabel}>Tipo *</Text>
         <View style={styles.chipRow}>
           {TYPE_OPTIONS.map((opt) => (
-            <TouchableOpacity
+            <Chip
               key={opt.value}
-              style={[styles.chip, type === opt.value && styles.chipActive]}
+              label={opt.label}
+              active={type === opt.value}
               onPress={() => setType(opt.value)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipText, type === opt.value && styles.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
+            />
           ))}
         </View>
 
@@ -163,90 +153,77 @@ export default function NewProductScreen() {
           contentContainerStyle={styles.chipRowScroll}
         >
           {categories.map((cat) => (
-            <TouchableOpacity
+            <Chip
               key={cat.id}
-              style={[styles.chip, categoryId === cat.id && styles.chipActive]}
+              label={cat.name}
+              active={categoryId === cat.id}
               onPress={() => setCategoryId(cat.id)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipText, categoryId === cat.id && styles.chipTextActive]}>
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
+              style={styles.chipSpacing}
+            />
           ))}
         </ScrollView>
 
-        <Text style={styles.fieldLabel}>Costo (ARS) *</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Costo (ARS) *"
           value={cost}
           onChangeText={setCost}
           keyboardType="decimal-pad"
           placeholder="0.00"
-          placeholderTextColor={theme.colors.muted}
+          containerStyle={styles.field}
         />
 
         {type === 'pack' && (
-          <>
-            <Text style={styles.fieldLabel}>Unidades por caja / pack *</Text>
-            <TextInput
-              style={styles.input}
-              value={unitsPerPack}
-              onChangeText={setUnitsPerPack}
-              keyboardType="number-pad"
-              placeholder="Ej: 12"
-              placeholderTextColor={theme.colors.muted}
-            />
-          </>
+          <TextField
+            label="Unidades por caja / pack *"
+            value={unitsPerPack}
+            onChangeText={setUnitsPerPack}
+            keyboardType="number-pad"
+            placeholder="Ej: 12"
+            containerStyle={styles.field}
+          />
         )}
 
-        <Text style={styles.fieldLabel}>Margen de ganancia (%)</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Margen de ganancia (%)"
           value={margin}
           onChangeText={setMargin}
           keyboardType="decimal-pad"
           placeholder="0"
-          placeholderTextColor={theme.colors.muted}
+          containerStyle={styles.field}
         />
 
         <Text style={styles.fieldLabel}>Redondeo del precio final *</Text>
         <Text style={styles.fieldHint}>El precio calculado se redondeará al valor elegido.</Text>
         <View style={styles.chipRow}>
           {ROUND_OPTIONS.map((opt) => (
-            <TouchableOpacity
+            <Chip
               key={opt.value}
-              style={[styles.chip, roundTo === opt.value && styles.chipActive]}
+              label={opt.label}
+              active={roundTo === opt.value}
               onPress={() => setRoundTo(opt.value)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipText, roundTo === opt.value && styles.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
+            />
           ))}
         </View>
 
         {costNum > 0 && (
           <>
-            <View style={styles.preview}>
+            <Card style={styles.preview}>
               <Text style={styles.previewLabel}>Precio sugerido</Text>
-              <Text style={styles.previewPrice}>${suggestedPrice.toLocaleString('es-AR')}</Text>
+              <AmountDisplay value={suggestedPrice} size="lg" tone="primary" />
               {type === 'pack' && unitsNum > 0 && (
                 <Text style={styles.previewSub}>
                   Costo unitario: ${(costNum / unitsNum).toFixed(2)}
                 </Text>
               )}
-            </View>
+            </Card>
 
-            <Text style={styles.fieldLabel}>Precio de venta *</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label="Precio de venta *"
               value={salePrice}
               onChangeText={handleSalePriceChange}
               keyboardType="decimal-pad"
               placeholder="0"
-              placeholderTextColor={theme.colors.muted}
+              containerStyle={styles.field}
             />
             {salePriceEdited && suggestedPrice > 0 && (
               <TouchableOpacity style={styles.resetBtn} onPress={resetSalePrice} activeOpacity={0.7}>
@@ -258,18 +235,7 @@ export default function NewProductScreen() {
           </>
         )}
 
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && styles.btnDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.saveBtnText}>Guardar producto</Text>
-          )}
-        </TouchableOpacity>
+        <Button label="Guardar producto" onPress={handleSave} loading={saving} style={styles.saveBtn} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -278,131 +244,77 @@ export default function NewProductScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xxl,
     paddingBottom: 100,
   },
+  field: {
+    marginBottom: theme.spacing.lg,
+  },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
-    marginBottom: 7,
+    marginBottom: 8,
     letterSpacing: 0.2,
   },
   fieldHint: {
-    fontSize: 11,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '500',
     marginTop: -4,
     marginBottom: 10,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 16,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
   chipRowScroll: {
     flexDirection: 'row',
-    gap: 8,
     paddingBottom: 4,
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
-  chip: {
-    height: 38,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chipActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: '#fff',
-    fontWeight: '700',
+  chipSpacing: {
+    marginRight: 8,
   },
   preview: {
     marginTop: 4,
-    marginBottom: 16,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    padding: 18,
+    marginBottom: theme.spacing.lg,
+    padding: theme.spacing.xl,
     alignItems: 'center',
-    borderWidth: 1.5,
     borderColor: theme.colors.primaryMid,
+    borderWidth: 1.5,
   },
   previewLabel: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.textSecondary,
-    fontWeight: '600',
     marginBottom: 4,
     letterSpacing: 0.3,
   },
-  previewPrice: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: theme.colors.primary,
-    letterSpacing: -1,
-  },
   previewSub: {
-    fontSize: 13,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
     color: theme.colors.muted,
     marginTop: 4,
-    fontWeight: '500',
   },
   resetBtn: {
     alignSelf: 'flex-start',
     marginTop: -8,
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.primaryMid,
   },
   resetBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.primary,
   },
   saveBtn: {
     marginTop: 8,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 17,
-    alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-    minHeight: 54,
-    justifyContent: 'center',
-  },
-  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
   },
 });

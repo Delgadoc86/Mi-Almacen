@@ -1,18 +1,11 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
+import { Button, Card, IconChip } from '@/components/ui';
 
 type Step = {
   title: string;
@@ -72,19 +65,14 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Icon */}
-        <View style={styles.iconWrap}>
-          <Ionicons name="storefront" size={38} color="#fff" />
-        </View>
+        <IconChip icon="storefront" size="lg" tone="primary" filled style={styles.iconWrap} />
 
-        {/* Header */}
         <Text style={styles.title}>Empezá con Mi Almacén</Text>
         <Text style={styles.subtitle}>
           Configurá lo básico y empezá a usar tu negocio en minutos.
         </Text>
 
-        {/* Checklist */}
-        <View style={styles.card}>
+        <Card style={styles.card}>
           {STEPS.map((step, index) => (
             <View key={index}>
               {index > 0 && <View style={styles.divider} />}
@@ -100,32 +88,18 @@ export default function OnboardingScreen() {
               </View>
             </View>
           ))}
-        </View>
+        </Card>
 
-        {/* Buttons */}
         {isManual ? (
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => router.back()}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.primaryBtnText}>Volver</Text>
-          </TouchableOpacity>
+          <Button label="Volver" onPress={() => router.back()} style={styles.stretch} />
         ) : (
           <>
-            <TouchableOpacity
-              style={[styles.primaryBtn, saving && styles.btnDisabled]}
+            <Button
+              label="Empezar"
               onPress={() => handleComplete(false)}
-              disabled={saving}
-              activeOpacity={0.85}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Empezar</Text>
-              )}
-            </TouchableOpacity>
-
+              loading={saving}
+              style={styles.stretch}
+            />
             <TouchableOpacity
               style={styles.skipBtn}
               onPress={() => handleComplete(true)}
@@ -145,70 +119,46 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xxl,
     paddingTop: 48,
     paddingBottom: 48,
     alignItems: 'center',
   },
-
   iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    marginBottom: theme.spacing.xxl,
   },
-
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h2,
     color: theme.colors.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginBottom: 10,
   },
   subtitle: {
-    fontSize: 15,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 32,
+    marginBottom: theme.spacing.xxxl,
     paddingHorizontal: 8,
   },
-
-  // ── Checklist card ──
   card: {
     alignSelf: 'stretch',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginBottom: 32,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: theme.spacing.xxxl,
     overflow: 'hidden',
   },
   divider: {
     height: 1,
     backgroundColor: theme.colors.divider,
-    marginHorizontal: 16,
+    marginHorizontal: theme.spacing.lg,
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.lg,
     gap: 14,
   },
   stepBadge: {
@@ -221,8 +171,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   stepNum: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.body,
     color: theme.colors.primary,
   },
   stepBody: {
@@ -230,50 +180,27 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   stepTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.body,
     color: theme.colors.text,
   },
   stepDesc: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '500',
     lineHeight: 17,
   },
-
-  // ── Buttons ──
-  primaryBtn: {
+  stretch: {
     alignSelf: 'stretch',
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
     marginBottom: 14,
   },
-  primaryBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-
   skipBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
   },
   skipBtnText: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
     color: theme.colors.muted,
-    fontWeight: '600',
   },
 });

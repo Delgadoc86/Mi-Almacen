@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { importInitialProducts, declineInitialProducts } from '@/services/importInitialProducts';
 import { normalizeText } from '@/utils/text';
 import { theme } from '@/theme';
+import { Button, Chip, IconChip, ScreenHeader } from '@/components/ui';
 
 export default function ProductsScreen() {
   const router = useRouter();
@@ -84,29 +85,31 @@ export default function ProductsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
-        {/* ── HEADER ── */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Productos</Text>
-          <View style={styles.headerActions}>
-            {!search.trim() && (
+        <ScreenHeader
+          title="Productos"
+          right={
+            <>
+              {!search.trim() && (
+                <TouchableOpacity
+                  style={styles.pdfBtn}
+                  onPress={() => router.push('/products/prices')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} />
+                  <Text style={styles.pdfBtnText}>PDF precios</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={styles.pdfBtn}
-                onPress={() => router.push('/products/prices')}
-                activeOpacity={0.7}
+                style={styles.fab}
+                onPress={() => router.push('/products/new')}
+                activeOpacity={0.85}
               >
-                <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} />
-                <Text style={styles.pdfBtnText}>PDF precios</Text>
+                <Ionicons name="add" size={24} color="#fff" />
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.fab}
-              onPress={() => router.push('/products/new')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </View>
+            </>
+          }
+        />
+        <View style={styles.headerSpacer} />
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Buscar producto..." />
 
@@ -116,19 +119,15 @@ export default function ProductsScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipRow}
           >
-            {categoryOptions.map((cat) => {
-              const active = selectedCategory === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setSelectedCategory(cat.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{cat.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            {categoryOptions.map((cat) => (
+              <Chip
+                key={cat.id}
+                label={cat.name}
+                active={selectedCategory === cat.id}
+                onPress={() => setSelectedCategory(cat.id)}
+                style={styles.chipSpacing}
+              />
+            ))}
           </ScrollView>
         )}
 
@@ -136,26 +135,18 @@ export default function ProductsScreen() {
           <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
         ) : showInitialOffer ? (
           <View style={styles.offerWrap}>
-            <View style={styles.offerIconWrap}>
-              <Ionicons name="storefront-outline" size={32} color={theme.colors.primary} />
-            </View>
+            <IconChip icon="storefront-outline" size="lg" tone="primary" style={styles.offerIconWrap} />
             <Text style={styles.offerTitle}>¿Querés empezar con una lista inicial?</Text>
             <Text style={styles.offerSubtitle}>
               Cargamos productos comunes de almacén con costo y precio sugerido. Después podés
               editar, borrar o agregar lo que quieras.
             </Text>
-            <TouchableOpacity
-              style={[styles.offerPrimaryBtn, importing && styles.btnDisabled]}
+            <Button
+              label="Cargar lista inicial"
               onPress={handleImport}
-              disabled={importing}
-              activeOpacity={0.85}
-            >
-              {importing ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.offerPrimaryBtnText}>Cargar lista inicial</Text>
-              )}
-            </TouchableOpacity>
+              loading={importing}
+              style={styles.offerPrimaryBtn}
+            />
             <TouchableOpacity
               style={styles.offerSecondaryBtn}
               onPress={handleDecline}
@@ -203,151 +194,87 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xl,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: theme.colors.text,
-    letterSpacing: -0.5,
-  },
+  headerSpacer: { height: theme.spacing.md },
   fab: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.accent,
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: theme.colors.primary,
+    shadowColor: theme.colors.accent,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.28,
     shadowRadius: 6,
     elevation: 3,
   },
   chipRow: {
     flexDirection: 'row',
-    gap: 7,
-    paddingBottom: 12,
+    paddingBottom: theme.spacing.md,
   },
-  chip: {
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chipActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: '#fff',
-    fontWeight: '700',
+  chipSpacing: {
+    marginRight: 7,
   },
   loader: { marginTop: 40 },
-  list: { paddingBottom: 20 },
+  list: { paddingBottom: theme.spacing.xl },
 
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   pdfBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     height: 36,
     paddingHorizontal: 10,
-    borderRadius: 10,
+    borderRadius: theme.radius.sm + 2,
     backgroundColor: theme.colors.surface,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
   },
   pdfBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
   },
 
-  // ── Lista inicial offer ───────────────────────────────────
   offerWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 32,
-    gap: 12,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.xxxl,
+    gap: theme.spacing.md,
   },
   offerIconWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 4,
   },
   offerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h2,
     color: theme.colors.text,
     textAlign: 'center',
     letterSpacing: -0.3,
   },
   offerSubtitle: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
-    fontWeight: '500',
     paddingHorizontal: 8,
     marginBottom: 8,
   },
   offerPrimaryBtn: {
     alignSelf: 'stretch',
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  offerPrimaryBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.2,
   },
   offerSecondaryBtn: {
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
   },
   offerSecondaryBtnText: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.body,
     color: theme.colors.muted,
-    fontWeight: '600',
-  },
-  btnDisabled: {
-    opacity: 0.5,
-    shadowOpacity: 0,
-    elevation: 0,
   },
 });

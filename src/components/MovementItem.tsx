@@ -1,6 +1,8 @@
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme } from '@/theme';
+import { ConfirmDialog } from '@/components/ui';
 import type { Movement } from '@/models';
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -26,6 +28,7 @@ function formatDate(ts: Movement['createdAt']): string {
 }
 
 export function MovementItem({ movement, onAnnul }: Props) {
+  const [confirmVisible, setConfirmVisible] = useState(false);
   const isReversal = movement.type === 'reversal';
   const isFiado = movement.type === 'fiado';
   const isAnnulled = !!movement.annulled;
@@ -51,24 +54,9 @@ export function MovementItem({ movement, onAnnul }: Props) {
       ? movement.description
       : null;
 
-  function handleMenuPress() {
-    Alert.alert('Opciones', undefined, [
-      {
-        text: 'Anular movimiento',
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(
-            'Anular movimiento',
-            '¿Anulás este movimiento? Se creará un movimiento inverso para corregir el saldo. Esta acción no se puede deshacer.',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Anular', style: 'destructive', onPress: onAnnul },
-            ],
-          );
-        },
-      },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
+  function handleConfirmAnnul() {
+    setConfirmVisible(false);
+    onAnnul?.();
   }
 
   return (
@@ -99,13 +87,22 @@ export function MovementItem({ movement, onAnnul }: Props) {
         {canAnnul && (
           <TouchableOpacity
             style={styles.menuBtn}
-            onPress={handleMenuPress}
+            onPress={() => setConfirmVisible(true)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="ellipsis-vertical" size={16} color={theme.colors.muted} />
           </TouchableOpacity>
         )}
       </View>
+      <ConfirmDialog
+        visible={confirmVisible}
+        title="Anular movimiento"
+        message="¿Anulás este movimiento? Se creará un movimiento inverso para corregir el saldo. Esta acción no se puede deshacer."
+        confirmLabel="Anular"
+        variant="destructive"
+        onConfirm={handleConfirmAnnul}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }
@@ -120,8 +117,8 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   annulledBadge: {
+    fontFamily: theme.fontFamily.extrabold,
     fontSize: 10,
-    fontWeight: '800',
     color: theme.colors.muted,
     letterSpacing: 1.5,
     marginBottom: 4,
@@ -139,11 +136,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   typeTag: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     overflow: 'hidden',
   },
   tagFiado: {
@@ -162,24 +159,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   description: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.text,
     marginBottom: 2,
-    fontWeight: '500',
   },
   textMuted: {
     color: theme.colors.muted,
   },
   date: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
   },
   right: {
     alignItems: 'flex-end',
   },
   amount: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.bodyLg,
     letterSpacing: -0.3,
   },
   amountFiado: {
@@ -192,7 +190,8 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
   },
   balanceAfter: {
-    fontSize: 11,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     marginTop: 2,
   },

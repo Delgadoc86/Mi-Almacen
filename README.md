@@ -12,7 +12,7 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 - **Dashboard** — card unificado con saldo de caja, deuda de fiados e inventario en tiempo real. Diseño de una sola pasada visual.
 - **Fiados** — registro de créditos y cobros por cliente, historial de movimientos. Al cobrar un fiado con caja abierta, el ingreso se registra automáticamente en caja (transacción atómica). Anulación de movimientos mediante inversión auditada: se crea un movimiento inverso y el original queda marcado como ANULADO (no se eliminan datos).
 - **Productos** — alta, edición y eliminación. Precio sugerido calculado automáticamente (costo + margen + redondeo) y precio de venta editable de forma independiente. Retrocompatible con productos existentes.
-- **Lista de precios PDF** — generación del catálogo agrupado por categoría en formato PDF. Herramienta de control de precios para el dueño del negocio; accesible desde la pantalla Productos.
+- **Lista de precios PDF** — generación del catálogo agrupado por categoría en formato PDF. Herramienta de control de precios para el dueño del negocio; accesible desde la pantalla Productos. Selector de categoría para generar el catálogo completo (default) o reimprimir una sola categoría (ej. solo "Bebidas"). Tipografía grande pensada para lectura rápida.
 - **Lista inicial de productos** — al registrarse con el catálogo vacío, se ofrece importar 90 productos preconfigurados de almacén (costo y precio sugerido +40%). Los productos son reales: editables y borrables. La oferta no vuelve a aparecer después de aceptar o rechazar.
 - **Categorías** — 10 categorías del sistema (Almacén, Bebidas, Lácteos, Carnes, Fiambrería, Verdulería, Limpieza, Higiene, Panadería, Otros) + categorías personalizadas
 - **Configuración** — nombre del comercio, margen por defecto, redondeo por defecto, categoría por defecto
@@ -20,6 +20,7 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 - **Offline** — banner de sin conexión automático. Firebase encola escrituras simples durante caídas momentáneas y sincroniza al reconectar. Transacciones financieras fallan conscientemente sin red.
 - **Exportar datos** — genera un JSON completo (productos, clientes, movimientos de fiados, historial de cajas) compartible por Drive, WhatsApp o email. Recordatorio semanal in-app si hace más de 7 días sin exportar.
 - **Eliminar cuenta** — borra todos los documentos de Firestore en lotes y elimina la cuenta de Firebase Auth. Doble confirmación y manejo de sesión expirada.
+- **Identidad visual propia** — paleta de marca (Azul Puerto + Terracota Almacén), tipografía Manrope, sistema de componentes reutilizables (`src/components/ui/`) y diálogos de confirmación propios en reemplazo de las alertas nativas del sistema operativo. Pensada para usuarios de 40-70 años: textos grandes, alto contraste, zonas táctiles amplias.
 
 ---
 
@@ -35,7 +36,8 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 | SDK Firebase | Firebase JS SDK 12.x (modular) |
 | PDF | expo-print + expo-sharing |
 | Persistencia local | @react-native-async-storage |
-| UI | React Native StyleSheet (sin librerías de UI externas) |
+| UI | React Native StyleSheet + sistema de componentes propio (`src/components/ui/`), sin librerías de UI externas |
+| Tipografía | Manrope (`@expo-google-fonts/manrope` + `expo-font`) |
 | Build | EAS Build (expo-constants) |
 
 ---
@@ -154,13 +156,14 @@ MiNegocio/
 │   ├── onboarding.tsx       # Guía inicial — se muestra una sola vez al registrarse
 │   └── _layout.tsx          # Root layout + guard de autenticación
 ├── src/
-│   ├── components/          # Componentes reutilizables (OfflineBanner…)
+│   ├── components/          # Componentes de dominio (CustomerCard, ProductCard, MovementItem, OfflineBanner, EmptyState, SearchBar…)
+│   │   └── ui/               # Design system: Button, TextField, Card, Chip, IconChip, InlineMessage, ListRow, AmountDisplay, ConfirmDialog, Toast, ScreenHeader
 │   ├── context/             # AuthContext
 │   ├── data/                # Datos estáticos (initialAlmacenProducts — lista inicial de 90 productos)
 │   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus…
 │   ├── models/              # Tipos TypeScript (Product, Customer, CashSession…)
 │   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount, importInitialProducts…)
-│   ├── theme/               # Paleta de colores y espaciado
+│   ├── theme/               # Design tokens: paleta, tipografía (Manrope), spacing, radios, sombras
 │   ├── types/               # Declaraciones de tipos globales (env.d.ts)
 │   ├── utils/               # Cálculo de precios, template PDF
 │   └── constants/           # Categorías por defecto (10), colecciones Firestore
@@ -219,6 +222,12 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 ---
 
 ## Historial de versiones
+
+### v1.3.0 — 2026-07-03
+- **Rediseño UI/UX completo** — identidad visual propia sin modificar lógica de negocio ni navegación. Paleta nueva (primary `#0F4C81` "Azul Puerto", accent `#C2542D` "Terracota Almacén"), tipografía Manrope, escala tipográfica más grande para usuarios de 40-70 años, tokens de spacing/radio/sombra unificados. Sistema de componentes nuevo en `src/components/ui/` (Button, TextField, Card, Chip, IconChip, InlineMessage, ListRow, AmountDisplay, ConfirmDialog, Toast, ScreenHeader) que reemplaza estilos duplicados en cada pantalla. Las alertas nativas del sistema operativo (`Alert.alert`) se reemplazaron por `ConfirmDialog` propio en las confirmaciones destructivas (mismos flujos de negocio, distinta UI). Ver detalle completo en `DECISIONES_TECNICAS.md`.
+- **Lista de precios por categoría** — nuevo selector en la pantalla de Lista de precios: por defecto genera el catálogo completo, o se puede elegir una sola categoría (ej. reimprimir solo "Bebidas") sin regenerar todo.
+- **Tipografía del PDF más grande** — el nombre del producto y los precios se agrandaron en los tres niveles de escala automática (catálogos chicos, medianos y grandes), priorizando legibilidad rápida sobre entrar en menos páginas.
+- **PDF con la identidad de marca** — la plantilla HTML del PDF (`pdfTemplate.ts`) pasó a usar los mismos tokens de color que la app en lugar de una paleta propia desconectada.
 
 ### v1.2.0 — 2026-06-28
 - **Precio de venta editable** — los productos tienen ahora dos precios diferenciados: `suggestedPrice` (calculado automáticamente por costo + margen + redondeo, solo lectura) y `salePrice` (editable por el dueño). Al crear o editar un producto, el precio de venta se sincroniza automáticamente con el sugerido a menos que el usuario lo modifique. Se muestra un botón para volver al sugerido en cualquier momento. El PDF y las tarjetas de producto usan `salePrice`. Retrocompatible con productos existentes.

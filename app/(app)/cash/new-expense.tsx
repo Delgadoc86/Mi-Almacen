@@ -10,11 +10,11 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCashSession } from '@/hooks/useCashSession';
 import { addCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
+import { InlineMessage, TextField } from '@/components/ui';
 
 export default function NewExpenseScreen() {
   const router = useRouter();
@@ -61,17 +61,13 @@ export default function NewExpenseScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior="padding"
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Monto */}
         <Text style={styles.sectionLabel}>Monto *</Text>
         <View style={styles.amountCard}>
           <Text style={styles.currencySign}>$</Text>
@@ -88,27 +84,19 @@ export default function NewExpenseScreen() {
           />
         </View>
 
-        {/* Descripción — obligatoria */}
-        <Text style={styles.sectionLabel}>¿En qué se gastó? *</Text>
-        <TextInput
+        <TextField
           ref={descriptionRef}
-          style={styles.descInput}
+          label="¿En qué se gastó? *"
           value={description}
           onChangeText={(t) => { setDescription(t); setError(''); }}
           placeholder="Ej: proveedor, flete, limpieza, reposición..."
-          placeholderTextColor={theme.colors.muted}
           autoCapitalize="sentences"
-          maxLength={80}
           returnKeyType="done"
           onSubmitEditing={handleSave}
+          containerStyle={styles.field}
         />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <InlineMessage variant="error" text={error} style={styles.field} /> : null}
 
         <TouchableOpacity
           style={[styles.saveBtn, !canSave && styles.btnDisabled]}
@@ -130,15 +118,15 @@ export default function NewExpenseScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xxl,
     paddingBottom: 100,
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
-    marginBottom: 10,
+    marginBottom: theme.spacing.md,
     letterSpacing: 0.2,
   },
   amountCard: {
@@ -147,72 +135,41 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.dangerLight,
     borderWidth: 1.5,
     borderColor: theme.colors.dangerMid,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: theme.radius.xl,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: 12,
-    marginBottom: 24,
+    marginBottom: theme.spacing.xxl,
   },
   currencySign: {
-    fontSize: 36,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.display,
     color: theme.colors.error,
     marginRight: 4,
   },
   amountInput: {
     flex: 1,
-    fontSize: 48,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.displayLg,
     color: theme.colors.error,
     padding: 0,
   },
-  descInput: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 20,
-    minHeight: 56,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
+  field: {
+    marginBottom: theme.spacing.xl,
   },
   saveBtn: {
     backgroundColor: theme.colors.error,
-    borderRadius: 16,
+    borderRadius: theme.radius.button,
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 56,
+    ...theme.shadow.lg,
     shadowColor: theme.colors.error,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 4,
   },
   saveBtnText: {
     color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.bodyLg,
     letterSpacing: 0.5,
   },
   btnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },

@@ -1,3 +1,4 @@
+import { theme } from '@/theme';
 import type { Category, Product } from '@/models';
 
 // ── Scale system ──────────────────────────────────────────────────────────────
@@ -23,46 +24,49 @@ function getPdfScale(count: number): PdfScale {
   return 'compact';
 }
 
+// Tamaños pensados para lectura rápida por personas de 40-70 años —
+// el nombre del producto (bodyFontPt) y el precio nunca deben achicarse
+// por debajo de lo legible, aunque eso implique más páginas.
 function getSv(scale: PdfScale): Sv {
   switch (scale) {
     case 'large':
       return {
-        mainTitlePt: 26,
-        businessNamePt: 15,
+        mainTitlePt: 28,
+        businessNamePt: 16,
+        metaPt: 10,
+        colHeaderPt: 9.5,
+        numFontPt: 13,
+        bodyFontPt: 16,
+        costFontPt: 13,
+        rowPaddingPt: 11,
+        catLabelPt: 11,
+        catMarginTopPt: 22,
+      };
+    case 'normal':
+      return {
+        mainTitlePt: 25,
+        businessNamePt: 14,
         metaPt: 9,
+        colHeaderPt: 8.5,
+        numFontPt: 12,
+        bodyFontPt: 14.5,
+        costFontPt: 12,
+        rowPaddingPt: 9,
+        catLabelPt: 10,
+        catMarginTopPt: 18,
+      };
+    case 'compact':
+      return {
+        mainTitlePt: 21,
+        businessNamePt: 12.5,
+        metaPt: 8.5,
         colHeaderPt: 8,
         numFontPt: 11,
         bodyFontPt: 13,
         costFontPt: 11,
-        rowPaddingPt: 10,
-        catLabelPt: 9,
-        catMarginTopPt: 20,
-      };
-    case 'normal':
-      return {
-        mainTitlePt: 21,
-        businessNamePt: 13,
-        metaPt: 8,
-        colHeaderPt: 7,
-        numFontPt: 9,
-        bodyFontPt: 11,
-        costFontPt: 9.5,
         rowPaddingPt: 7,
-        catLabelPt: 7.5,
-        catMarginTopPt: 13,
-      };
-    case 'compact':
-      return {
-        mainTitlePt: 17,
-        businessNamePt: 11,
-        metaPt: 7.5,
-        colHeaderPt: 6.5,
-        numFontPt: 8,
-        bodyFontPt: 9.5,
-        costFontPt: 8.5,
-        rowPaddingPt: 5,
-        catLabelPt: 7,
-        catMarginTopPt: 10,
+        catLabelPt: 9.5,
+        catMarginTopPt: 15,
       };
   }
 }
@@ -101,16 +105,20 @@ function getAverageMargin(products: Product[]): number | null {
 
 // ── Filename generator ────────────────────────────────────────────────────────
 
-export function generatePdfFilename(businessName: string): string {
-  const date = new Date().toISOString().split('T')[0];
-  const sanitized = businessName
+function sanitizeForFilename(text: string): string {
+  return text
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-zA-Z0-9\s]/g, ' ')
     .trim()
     .replace(/\s+/g, '_');
-  const name = sanitized || 'MiAlmacen';
-  return `${name}_Control_Precios_${date}`;
+}
+
+export function generatePdfFilename(businessName: string, categoryName?: string): string {
+  const date = new Date().toISOString().split('T')[0];
+  const name = sanitizeForFilename(businessName) || 'MiAlmacen';
+  const suffix = categoryName ? sanitizeForFilename(categoryName) : 'Control_Precios';
+  return `${name}_${suffix}_${date}`;
 }
 
 // ── CSS builder ───────────────────────────────────────────────────────────────
@@ -127,16 +135,16 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
         content: "${escapeCss(businessName)} · Control de precios";
         font-family: Arial, Helvetica, sans-serif;
         font-size: 7pt;
-        color: #9CA3AF;
-        border-top: 0.5pt solid #E5E7EB;
+        color: ${theme.colors.muted};
+        border-top: 0.5pt solid ${theme.colors.border};
         padding-top: 4pt;
       }
       @bottom-right {
         content: "Página " counter(page) " de " counter(pages) " · ${escapeCss(date)}";
         font-family: Arial, Helvetica, sans-serif;
         font-size: 7pt;
-        color: #9CA3AF;
-        border-top: 0.5pt solid #E5E7EB;
+        color: ${theme.colors.muted};
+        border-top: 0.5pt solid ${theme.colors.border};
         padding-top: 4pt;
       }
     }
@@ -145,7 +153,7 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
 
     body {
       font-family: Arial, Helvetica, sans-serif;
-      color: #111827;
+      color: ${theme.colors.text};
       background: #fff;
     }
 
@@ -156,8 +164,8 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
       display: flex;
       justify-content: space-between;
       font-size: 7pt;
-      color: #9CA3AF;
-      border-top: 0.5pt solid #E5E7EB;
+      color: ${theme.colors.muted};
+      border-top: 0.5pt solid ${theme.colors.border};
       padding-top: 4pt;
       background: #fff;
     }
@@ -166,12 +174,12 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
     .doc-header {
       padding-bottom: 12pt;
       margin-bottom: 16pt;
-      border-bottom: 2pt solid #1D4ED8;
+      border-bottom: 2pt solid ${theme.colors.primary};
     }
     .doc-main-title {
       font-size: ${sv.mainTitlePt}pt;
       font-weight: bold;
-      color: #111827;
+      color: ${theme.colors.text};
       letter-spacing: 2pt;
       line-height: 1.1;
     }
@@ -184,14 +192,14 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
     .doc-business-name {
       font-size: ${sv.businessNamePt}pt;
       font-weight: bold;
-      color: #1D4ED8;
+      color: ${theme.colors.primary};
       letter-spacing: 0.4pt;
     }
     .doc-badge {
       font-size: 6pt;
       font-weight: bold;
-      color: #6B7280;
-      border: 0.5pt solid #D1D5DB;
+      color: ${theme.colors.accent};
+      border: 0.5pt solid ${theme.colors.accent};
       border-radius: 2pt;
       padding: 1.5pt 5pt;
       letter-spacing: 0.8pt;
@@ -200,10 +208,10 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
     .doc-meta {
       margin-top: 8pt;
       font-size: ${sv.metaPt}pt;
-      color: #6B7280;
+      color: ${theme.colors.textSecondary};
     }
-    .doc-meta strong { color: #374151; }
-    .doc-meta-sep { color: #D1D5DB; margin: 0 5pt; }
+    .doc-meta strong { color: ${theme.colors.text}; }
+    .doc-meta-sep { color: ${theme.colors.border}; margin: 0 5pt; }
 
     /* ── Category block ── */
     .category-block {
@@ -215,19 +223,19 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
       justify-content: space-between;
       align-items: baseline;
       padding: 4pt 0 3pt 0;
-      border-top: 1pt solid #BFDBFE;
-      border-bottom: 0.5pt solid #DBEAFE;
+      border-top: 1pt solid ${theme.colors.primaryMid};
+      border-bottom: 0.5pt solid ${theme.colors.primaryLight};
       page-break-after: avoid;
     }
     .cat-name {
       font-size: ${sv.catLabelPt}pt;
       font-weight: bold;
-      color: #1D4ED8;
+      color: ${theme.colors.primary};
       letter-spacing: 1pt;
     }
     .cat-count {
       font-size: ${catCountPt}pt;
-      color: #9CA3AF;
+      color: ${theme.colors.muted};
     }
 
     /* ── Table ── */
@@ -237,12 +245,12 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
     thead th {
       font-size: ${sv.colHeaderPt}pt;
       font-weight: bold;
-      color: #9CA3AF;
+      color: ${theme.colors.muted};
       text-transform: uppercase;
       letter-spacing: 0.4pt;
       padding: 4pt 5pt 3pt;
-      background-color: #F9FAFB;
-      border-bottom: 1pt solid #E5E7EB;
+      background-color: ${theme.colors.background};
+      border-bottom: 1pt solid ${theme.colors.border};
     }
     .th-num   { text-align: right; width: 5%;  padding-right: 7pt; }
     .th-name  { text-align: left;  width: 33%; }
@@ -251,28 +259,28 @@ function buildCss(sv: Sv, businessName: string, date: string): string {
     .th-new   { text-align: left;  width: 30%; padding-left: 10pt; }
 
     tbody tr { page-break-inside: avoid; }
-    tbody tr:nth-child(even) { background-color: #FAFAFA; }
+    tbody tr:nth-child(even) { background-color: ${theme.colors.background}; }
     tbody td {
       padding: ${sv.rowPaddingPt}pt 5pt;
-      border-bottom: 0.5pt solid #F3F4F6;
+      border-bottom: 0.5pt solid ${theme.colors.divider};
       vertical-align: middle;
     }
     tbody tr:last-child td { border-bottom: none; }
 
     .col-num   {
       font-size: ${sv.numFontPt}pt;
-      color: #9CA3AF;
+      color: ${theme.colors.muted};
       text-align: right;
       white-space: nowrap;
       width: 5%;
       padding-right: 7pt;
     }
-    .col-name  { font-size: ${sv.bodyFontPt}pt; color: #111827; width: 33%; }
-    .col-cost  { font-size: ${sv.costFontPt}pt; color: #6B7280; text-align: right; width: 13%; }
+    .col-name  { font-size: ${sv.bodyFontPt}pt; color: ${theme.colors.text}; width: 33%; }
+    .col-cost  { font-size: ${sv.costFontPt}pt; color: ${theme.colors.textSecondary}; text-align: right; width: 13%; }
     .col-price {
       font-size: ${sv.bodyFontPt}pt;
       font-weight: bold;
-      color: #111827;
+      color: ${theme.colors.text};
       text-align: right;
       width: 19%;
     }
@@ -336,6 +344,7 @@ export function buildPdfHtml(
   businessName: string,
   products: Product[],
   categories: Category[],
+  filterCategoryName?: string,
 ): string {
   const scale = getPdfScale(products.length);
   const sv = getSv(scale);
@@ -377,9 +386,10 @@ export function buildPdfHtml(
   }
 
   const metaParts: string[] = [
+    ...(filterCategoryName ? [`Categoría: <strong>${escapeHtml(filterCategoryName)}</strong>`] : []),
     `Actualizado: <strong>${escapeHtml(date)}</strong>`,
     `${products.length} ${products.length === 1 ? 'producto' : 'productos'}`,
-    `${activeCategoryCount} ${activeCategoryCount === 1 ? 'categoría' : 'categorías'}`,
+    ...(filterCategoryName ? [] : [`${activeCategoryCount} ${activeCategoryCount === 1 ? 'categoría' : 'categorías'}`]),
     ...(avgMargin !== null ? [`Margen promedio: <strong>${avgMargin}%</strong>`] : []),
   ];
 

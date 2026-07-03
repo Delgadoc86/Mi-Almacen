@@ -3,7 +3,7 @@ import { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'Mi Almacén',
   slug: 'mi-almacen',
-  version: '1.2.0',
+  version: '1.3.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'mialmacen',
@@ -11,7 +11,7 @@ const config: ExpoConfig = {
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#F8FAFB',
+    backgroundColor: '#F5F7FA',
   },
   ios: {
     supportsTablet: true,
@@ -21,9 +21,9 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.delgadodev.mialmacen',
-    versionCode: 4,
+    versionCode: 5,
     adaptiveIcon: {
-      backgroundColor: '#E6F4FE',
+      backgroundColor: '#E9F1FA',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
@@ -38,6 +38,7 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-secure-store',
     'expo-local-authentication',
+    'expo-font',
   ],
   extra: {
     eas: {

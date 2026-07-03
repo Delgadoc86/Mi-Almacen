@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,6 +13,7 @@ import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
+import { Button, IconChip, InlineMessage, TextField } from '@/components/ui';
 
 const ERROR_MAP: Record<string, string> = {
   'auth/email-already-in-use': 'Ya existe una cuenta con ese email.',
@@ -35,7 +35,6 @@ export default function RegisterScreen() {
   const [businessName, setBusinessName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generalError, setGeneralError] = useState('');
 
@@ -74,75 +73,51 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── BRANDING ── */}
         <View style={styles.brandSection}>
-          <View style={styles.logoWrap}>
-            <Ionicons name="storefront" size={30} color={theme.colors.primary} />
-          </View>
+          <IconChip icon="storefront" size="lg" tone="primary" />
           <Text style={styles.title}>Crear cuenta</Text>
           <Text style={styles.subtitle}>Tu comercio listo en un minuto</Text>
         </View>
 
-        {/* ── FORM ── */}
         <View style={styles.form}>
-          <Text style={styles.fieldLabel}>Nombre del comercio</Text>
-          <TextInput
-            style={styles.input}
+          <TextField
+            label="Nombre del comercio"
             value={businessName}
             onChangeText={(t) => { setBusinessName(t); setGeneralError(''); }}
             placeholder="Ej: Almacén Don Pepe"
-            placeholderTextColor={theme.colors.muted}
             autoCapitalize="words"
             returnKeyType="next"
             onSubmitEditing={() => emailRef.current?.focus()}
+            containerStyle={styles.field}
           />
 
-          <Text style={styles.fieldLabel}>Email</Text>
-          <TextInput
+          <TextField
             ref={emailRef}
-            style={styles.input}
+            label="Email"
             value={email}
             onChangeText={(t) => { setEmail(t); setGeneralError(''); }}
             placeholder="tucorreo@ejemplo.com"
-            placeholderTextColor={theme.colors.muted}
             keyboardType="email-address"
             autoCapitalize="none"
-            autoCorrect={false}
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
+            containerStyle={styles.field}
           />
 
-          <Text style={styles.fieldLabel}>Contraseña</Text>
-          <View style={styles.inputWrap}>
-            <TextInput
-              ref={passwordRef}
-              style={styles.inputInner}
-              value={password}
-              onChangeText={(t) => { setPassword(t); setGeneralError(''); }}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor={theme.colors.muted}
-              secureTextEntry={!showPassword}
-              returnKeyType="done"
-              onSubmitEditing={handleRegister}
-            />
-            <TouchableOpacity
-              style={styles.eyeBtn}
-              onPress={() => setShowPassword((p) => !p)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={theme.colors.muted}
-              />
-            </TouchableOpacity>
-          </View>
+          <TextField
+            ref={passwordRef}
+            label="Contraseña"
+            value={password}
+            onChangeText={(t) => { setPassword(t); setGeneralError(''); }}
+            placeholder="Mínimo 6 caracteres"
+            secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={handleRegister}
+            containerStyle={styles.field}
+          />
 
           {generalError ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-              <Text style={styles.errorText}>{generalError}</Text>
-            </View>
+            <InlineMessage variant="error" text={generalError} style={styles.field} />
           ) : null}
 
           <View style={styles.verificationHint}>
@@ -152,21 +127,9 @@ export default function RegisterScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.primaryBtn, loading && styles.btnDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Crear cuenta</Text>
-            )}
-          </TouchableOpacity>
+          <Button label="Crear cuenta" onPress={handleRegister} loading={loading} />
         </View>
 
-        {/* ── FOOTER ── */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>¿Ya tenés cuenta? </Text>
           <TouchableOpacity onPress={() => router.push('/login')}>
@@ -182,144 +145,56 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.xxl,
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: theme.spacing.huge,
     justifyContent: 'center',
   },
   brandSection: {
     alignItems: 'center',
-    marginBottom: 36,
-  },
-  logoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 3,
+    marginBottom: theme.spacing.xxxl,
+    gap: theme.spacing.md,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h2,
     color: theme.colors.text,
     letterSpacing: -0.5,
-    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 15,
-    color: theme.colors.muted,
-    fontWeight: '500',
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
+    color: theme.colors.textSecondary,
   },
   form: { width: '100%' },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    marginBottom: 7,
-    letterSpacing: 0.2,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  inputInner: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  eyeBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
+  field: {
+    marginBottom: theme.spacing.lg,
   },
   verificationHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 20,
+    marginBottom: theme.spacing.xl,
   },
   verificationHintText: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '500',
-  },
-  primaryBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 17,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-    minHeight: 54,
-    justifyContent: 'center',
-  },
-  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
-  primaryBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 28,
+    marginTop: theme.spacing.xxl,
   },
   footerText: {
-    fontSize: 15,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.muted,
-    fontWeight: '500',
   },
   footerLink: {
-    fontSize: 15,
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.body,
     color: theme.colors.primary,
-    fontWeight: '700',
   },
 });

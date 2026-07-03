@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { theme } from '@/theme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 export function OfflineBanner() {
@@ -17,18 +18,18 @@ export function OfflineBanner() {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: '#374151',
+    backgroundColor: theme.colors.offline,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
   },
   text: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     flexShrink: 1,
   },
 });

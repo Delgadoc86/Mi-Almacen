@@ -19,6 +19,7 @@ import { useCashMovements } from '@/hooks/useCashMovements';
 import { useAuth } from '@/hooks/useAuth';
 import { openCashSession, reopenCashSession } from '@/services/cash';
 import { theme } from '@/theme';
+import { AmountDisplay, Button, ConfirmDialog, IconChip, InlineMessage } from '@/components/ui';
 import type { CashSession, CashMovement } from '@/models';
 
 // ── Helpers ──────────────────────────────────────────────
@@ -103,7 +104,7 @@ function AmountInput({
   placeholder?: string;
 }) {
   const [focused, setFocused] = useState(false);
-  const display = value ? '$ ' + parseInt(value, 10).toLocaleString('es-AR') : '';
+  const display = value ? '$ ' + parseInt(value, 10).toLocaleString('es-AR') : '';
 
   return (
     <TouchableOpacity
@@ -176,9 +177,7 @@ function OpenCashView() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.openIconWrap}>
-          <Ionicons name="storefront-outline" size={48} color={theme.colors.primary} />
-        </View>
+        <IconChip icon="storefront-outline" size="xl" tone="primary" style={styles.openIconWrap} />
 
         <Text style={styles.openTitle}>Abrir caja</Text>
         <Text style={styles.openSubtitle}>
@@ -192,28 +191,15 @@ function OpenCashView() {
           inputRef={inputRef}
         />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={14} color={theme.colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <InlineMessage variant="error" text={error} style={styles.errorBox} /> : null}
 
-        <TouchableOpacity
-          style={[styles.primaryBtn, saving && styles.btnDisabled]}
+        <Button
+          label="ABRIR CAJA"
+          icon="lock-open-outline"
           onPress={handleOpen}
-          disabled={saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="lock-open-outline" size={20} color="#fff" />
-              <Text style={styles.primaryBtnText}>ABRIR CAJA</Text>
-            </>
-          )}
-        </TouchableOpacity>
+          loading={saving}
+          style={styles.stretchBtn}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -227,6 +213,7 @@ function ClosedCashView({ session }: { session: CashSession }) {
   const [showDetail, setShowDetail] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [confirmReopenVisible, setConfirmReopenVisible] = useState(false);
   const [newAmount, setNewAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -250,28 +237,17 @@ function ClosedCashView({ session }: { session: CashSession }) {
     setError('');
   }
 
-  async function handleReopen() {
-    Alert.alert(
-      'Reabrir caja',
-      'La caja anterior volverá a quedar activa con todos sus movimientos.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Reabrir',
-          onPress: async () => {
-            if (!userProfile?.businessId) return;
-            setReopening(true);
-            try {
-              await reopenCashSession(userProfile.businessId, session.id);
-            } catch {
-              Alert.alert('Error', 'No se pudo reabrir la caja. Intentá de nuevo.');
-            } finally {
-              setReopening(false);
-            }
-          },
-        },
-      ],
-    );
+  async function handleConfirmReopen() {
+    setConfirmReopenVisible(false);
+    if (!userProfile?.businessId) return;
+    setReopening(true);
+    try {
+      await reopenCashSession(userProfile.businessId, session.id);
+    } catch {
+      Alert.alert('Error', 'No se pudo reabrir la caja. Intentá de nuevo.');
+    } finally {
+      setReopening(false);
+    }
   }
 
   async function handleOpenNew() {
@@ -296,7 +272,6 @@ function ClosedCashView({ session }: { session: CashSession }) {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* ── Resumen compacto ── */}
       <View style={styles.closedCompact}>
         <View style={styles.closedCompactLeft}>
           <View style={styles.closedStateBadge}>
@@ -314,13 +289,10 @@ function ClosedCashView({ session }: { session: CashSession }) {
         </View>
         <View style={styles.closedCompactRight}>
           <Text style={styles.closedSaldoLabel}>Saldo final</Text>
-          <Text style={[styles.closedSaldoValue, saldo < 0 && styles.textDanger]}>
-            {formatARS(saldo)}
-          </Text>
+          <AmountDisplay value={saldo} size="md" tone={saldo < 0 ? 'danger' : 'default'} />
         </View>
       </View>
 
-      {/* ── Detalle expandible ── */}
       <TouchableOpacity
         style={styles.detailToggle}
         onPress={() => setShowDetail((v) => !v)}
@@ -355,7 +327,6 @@ function ClosedCashView({ session }: { session: CashSession }) {
         </View>
       )}
 
-      {/* ── Acción primaria ── */}
       {showNewForm ? (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.newCajaCard}>
@@ -368,12 +339,7 @@ function ClosedCashView({ session }: { session: CashSession }) {
               inputRef={newInputRef}
             />
 
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={14} color={theme.colors.error} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+            {error ? <InlineMessage variant="error" text={error} style={styles.errorBox} /> : null}
 
             <View style={styles.newCajaRow}>
               <TouchableOpacity
@@ -403,20 +369,17 @@ function ClosedCashView({ session }: { session: CashSession }) {
           </View>
         </KeyboardAvoidingView>
       ) : (
-        <TouchableOpacity
-          style={styles.primaryBtn}
+        <Button
+          label="ABRIR NUEVA CAJA"
+          icon="lock-open-outline"
           onPress={handleShowNewForm}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="lock-open-outline" size={20} color="#fff" />
-          <Text style={styles.primaryBtnText}>ABRIR NUEVA CAJA</Text>
-        </TouchableOpacity>
+          style={styles.stretchBtnSm}
+        />
       )}
 
-      {/* ── Secundarios ── */}
       <TouchableOpacity
         style={[styles.secondaryBtn, reopening && styles.btnDisabled]}
-        onPress={handleReopen}
+        onPress={() => setConfirmReopenVisible(true)}
         disabled={reopening}
         activeOpacity={0.8}
       >
@@ -438,6 +401,15 @@ function ClosedCashView({ session }: { session: CashSession }) {
         <Ionicons name="time-outline" size={14} color={theme.colors.primary} />
         <Text style={styles.linkBtnTxt}>Ver historial de cajas</Text>
       </TouchableOpacity>
+
+      <ConfirmDialog
+        visible={confirmReopenVisible}
+        title="Reabrir caja"
+        message="La caja anterior volverá a quedar activa con todos sus movimientos."
+        confirmLabel="Reabrir"
+        onConfirm={handleConfirmReopen}
+        onCancel={() => setConfirmReopenVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -490,9 +462,9 @@ function ActiveCashView({ session }: { session: CashSession }) {
     >
       {showLongAlert && (
         <TouchableOpacity style={styles.longAlert} onPress={() => router.push('/cash/close')} activeOpacity={0.8}>
-          <Ionicons name="time-outline" size={16} color="#92400E" />
+          <Ionicons name="time-outline" size={16} color={theme.colors.warning} />
           <Text style={styles.longAlertTxt}>Caja abierta hace más de 36 h — cerrar</Text>
-          <Ionicons name="chevron-forward" size={14} color="#92400E" />
+          <Ionicons name="chevron-forward" size={14} color={theme.colors.warning} />
         </TouchableOpacity>
       )}
 
@@ -503,12 +475,9 @@ function ActiveCashView({ session }: { session: CashSession }) {
         </View>
       )}
 
-      {/* ── Saldo ── */}
       <View style={styles.saldoCard}>
         <Text style={styles.saldoLabel}>SALDO ACTUAL</Text>
-        <Text style={[styles.saldoAmount, saldo < 0 && styles.textDanger]}>
-          {formatARS(saldo)}
-        </Text>
+        <AmountDisplay value={saldo} size="hero" tone={saldo < 0 ? 'danger' : 'success'} style={styles.saldoAmount} />
         <View style={styles.saldoStats}>
           <View style={styles.saldoStat}>
             <Text style={styles.saldoStatNum}>
@@ -531,7 +500,6 @@ function ActiveCashView({ session }: { session: CashSession }) {
         </View>
       </View>
 
-      {/* ── Acciones ── */}
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={[styles.actionBtn, styles.ingresoBtn]}
@@ -559,7 +527,6 @@ function ActiveCashView({ session }: { session: CashSession }) {
         </TouchableOpacity>
       </View>
 
-      {/* ── Movimientos ── */}
       <View style={styles.movSection}>
         <View style={styles.movHeader}>
           <Text style={styles.movTitle}>Últimos movimientos</Text>
@@ -624,39 +591,34 @@ export default function CashScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   flex: { flex: 1 },
-  root: { flex: 1, paddingHorizontal: 20, paddingTop: 20 },
+  root: { flex: 1, paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.xl },
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h1,
     color: theme.colors.text,
     letterSpacing: -0.5,
-    marginBottom: 20,
+    marginBottom: theme.spacing.xl,
   },
 
   // ── OpenCashView
-  openContainer: { paddingTop: 20, paddingBottom: 40, alignItems: 'center' },
+  openContainer: { paddingTop: theme.spacing.xl, paddingBottom: 40, alignItems: 'center' },
   openIconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: theme.spacing.xl,
   },
   openTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h1,
     color: theme.colors.text,
     letterSpacing: -0.4,
     marginBottom: 8,
   },
   openSubtitle: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
     lineHeight: 20,
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: theme.spacing.xxl + 4,
     maxWidth: 280,
   },
 
@@ -664,19 +626,19 @@ const styles = StyleSheet.create({
   amountBox: {
     width: '100%',
     backgroundColor: theme.colors.surface,
-    borderRadius: 18,
+    borderRadius: theme.radius.xl,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
-    padding: 18,
-    marginBottom: 16,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
   },
   amountBoxFocused: {
     borderColor: theme.colors.primary,
     backgroundColor: theme.colors.primaryLight,
   },
   amountBoxLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -688,14 +650,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   amountBoxValue: {
-    fontSize: 40,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.display,
     color: theme.colors.text,
     letterSpacing: -1,
   },
   amountBoxPlaceholder: {
-    fontSize: 40,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.display,
     color: theme.colors.muted,
     letterSpacing: -1,
   },
@@ -704,7 +666,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: theme.colors.divider,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
@@ -712,8 +674,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primaryMid,
   },
   amountBoxTagText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
   },
   hiddenInput: {
@@ -723,45 +685,18 @@ const styles = StyleSheet.create({
     height: 1,
   },
 
-  // ── primaryBtn
-  primaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+  stretchBtn: {
     width: '100%',
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 18,
-    minHeight: 58,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-    marginBottom: 12,
   },
-  primaryBtnText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.5 },
-  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
+  stretchBtnSm: {
+    width: '100%',
+    marginBottom: theme.spacing.md,
+  },
+  btnDisabled: { opacity: 0.5 },
 
   errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 12,
     width: '100%',
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
+    marginBottom: theme.spacing.md,
   },
 
   // ── ClosedCashView
@@ -772,11 +707,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: 18,
+    borderRadius: theme.radius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.lg,
     marginBottom: 8,
   },
   closedCompactLeft: { gap: 4, flex: 1 },
@@ -793,17 +728,22 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.muted,
   },
   closedStateTxt: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: theme.colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  closedWhen: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '500' },
-  closedDuration: { fontSize: 12, color: theme.colors.muted, fontWeight: '500' },
+  closedWhen: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.textSecondary },
+  closedDuration: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.micro, color: theme.colors.muted },
   closedCompactRight: { alignItems: 'flex-end', gap: 2 },
-  closedSaldoLabel: { fontSize: 11, color: theme.colors.muted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  closedSaldoValue: { fontSize: 26, fontWeight: '800', color: theme.colors.text, letterSpacing: -0.5 },
+  closedSaldoLabel: {
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
+    color: theme.colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
 
   // Detalle expandible
   detailToggle: {
@@ -815,18 +755,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   detailToggleTxt: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
     color: theme.colors.primary,
   },
   detailCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 16,
+    borderRadius: theme.radius.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
   detailRow: {
     flexDirection: 'row',
@@ -834,38 +774,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
   },
-  detailLabel: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500' },
-  detailLabelBold: { fontWeight: '700', color: theme.colors.text },
-  detailValue: { fontSize: 14, color: theme.colors.text, fontWeight: '600' },
-  detailValueBold: { fontSize: 15, fontWeight: '800' },
+  detailLabel: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.body, color: theme.colors.textSecondary },
+  detailLabelBold: { fontFamily: theme.fontFamily.bold, color: theme.colors.text },
+  detailValue: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.body, color: theme.colors.text },
+  detailValueBold: { fontFamily: theme.fontFamily.extrabold, fontSize: theme.font.bodyLg },
   detailDivider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: 4 },
 
   // Formulario nueva caja
   newCajaCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 18,
+    borderRadius: theme.radius.xl,
     borderWidth: 1.5,
     borderColor: theme.colors.primaryMid,
-    padding: 18,
-    marginBottom: 12,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.md,
   },
   newCajaTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: theme.colors.text,
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
-  newCajaRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  newCajaRow: { flexDirection: 'row', gap: 10, marginTop: theme.spacing.md },
   newCajaCancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
-  newCajaCancelTxt: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  newCajaCancelTxt: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.caption, color: theme.colors.textSecondary },
   newCajaConfirmBtn: {
     flex: 2,
     flexDirection: 'row',
@@ -873,11 +813,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.primary,
   },
-  newCajaConfirmTxt: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.4 },
-  newCajaHint: { fontSize: 12, color: theme.colors.muted, textAlign: 'center', marginTop: 10 },
+  newCajaConfirmTxt: { fontFamily: theme.fontFamily.extrabold, fontSize: theme.font.body, color: '#fff', letterSpacing: 0.4 },
+  newCajaHint: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.micro, color: theme.colors.muted, textAlign: 'center', marginTop: 10 },
 
   // Botones secundarios
   secondaryBtn: {
@@ -886,13 +826,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
     marginBottom: 10,
   },
-  secondaryBtnTxt: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  secondaryBtnTxt: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.caption, color: theme.colors.textSecondary },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -900,7 +840,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
   },
-  linkBtnTxt: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  linkBtnTxt: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.caption, color: theme.colors.primary },
 
   // ── ActiveCashView
   activeContainer: { paddingTop: 0, paddingBottom: 40 },
@@ -908,46 +848,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: theme.colors.warningLight,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 12,
+    borderColor: theme.colors.warningBorder,
+    borderRadius: theme.radius.md,
     paddingHorizontal: 14,
     paddingVertical: 11,
-    marginBottom: 14,
+    marginBottom: theme.spacing.md,
   },
-  longAlertTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400E' },
+  longAlertTxt: { flex: 1, fontFamily: theme.fontFamily.semibold, fontSize: theme.font.caption, color: theme.colors.warning },
   activeInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: theme.spacing.md,
   },
-  activeWhen: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '500' },
-  activeElapsed: { fontSize: 13, color: theme.colors.muted, fontWeight: '500' },
+  activeWhen: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.textSecondary },
+  activeElapsed: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.muted },
   saldoCard: {
     backgroundColor: theme.colors.successLight,
     borderWidth: 1.5,
     borderColor: theme.colors.successMid,
-    borderRadius: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    borderRadius: theme.radius['2xl'],
+    paddingVertical: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.xl,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
   saldoLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     color: theme.colors.success,
     letterSpacing: 1.2,
     marginBottom: 4,
   },
   saldoAmount: {
-    fontSize: 52,
-    fontWeight: '800',
-    color: theme.colors.success,
-    letterSpacing: -1.5,
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
   saldoStats: {
     flexDirection: 'row',
@@ -956,18 +892,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saldoStat: { alignItems: 'center', gap: 2 },
-  saldoStatNum: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
-  saldoStatLbl: { fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary },
+  saldoStatNum: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.body, color: theme.colors.text },
+  saldoStatLbl: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.micro, color: theme.colors.textSecondary },
   saldoStatDiv: { width: 1, height: 28, backgroundColor: theme.colors.successMid },
 
-  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  actionRow: { flexDirection: 'row', gap: 10, marginBottom: theme.spacing.xl },
   actionBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: theme.spacing.lg,
+    borderRadius: theme.radius.card,
     borderWidth: 1.5,
   },
   ingresoBtn: {
@@ -982,28 +918,28 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
   },
-  actionBtnTxt: { fontSize: 13, fontWeight: '700' },
+  actionBtnTxt: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.caption },
 
   movSection: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 18,
+    borderRadius: theme.radius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 14,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
-  movHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  movTitle: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
-  movVerTodos: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-  movEmpty: { fontSize: 14, color: theme.colors.muted, textAlign: 'center', paddingVertical: 10 },
+  movHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md },
+  movTitle: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.caption, color: theme.colors.text },
+  movVerTodos: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.caption, color: theme.colors.primary },
+  movEmpty: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.body, color: theme.colors.muted, textAlign: 'center', paddingVertical: 10 },
   movRow: { paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  movHour: { fontSize: 12, color: theme.colors.muted, fontWeight: '600', width: 36 },
-  movLabel: { flex: 1, fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500' },
-  movAmount: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  movHour: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.micro, color: theme.colors.muted, width: 36 },
+  movLabel: { flex: 1, fontFamily: theme.fontFamily.medium, fontSize: theme.font.body, color: theme.colors.textSecondary },
+  movAmount: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.bodyLg, letterSpacing: -0.2 },
   movDivider: { height: 1, backgroundColor: theme.colors.divider },
 
   // ── Shared
   textDanger: { color: theme.colors.error },
-  textHighlight: { color: theme.colors.success, fontWeight: '700' },
+  textHighlight: { color: theme.colors.success, fontFamily: theme.fontFamily.bold },
 });

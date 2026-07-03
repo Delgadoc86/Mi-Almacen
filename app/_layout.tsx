@@ -1,12 +1,27 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import {
+  useFonts,
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+  Manrope_800ExtraBold,
+} from '@expo-google-fonts/manrope';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
 
 function RootGuard() {
   const { firebaseUser, userProfile, loading } = useAuth();
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+  });
   const router = useRouter();
   const segments = useSegments();
 
@@ -34,7 +49,7 @@ function RootGuard() {
     }
   }, [firebaseUser, userProfile, loading, segments, firebaseUser?.emailVerified]);
 
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return (
       <View
         style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}

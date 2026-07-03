@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { useCashSession } from '@/hooks/useCashSession';
 import { registerMovement, annulMovement } from '@/services/customers';
 import { MovementItem } from '@/components/MovementItem';
 import { theme } from '@/theme';
+import { AmountDisplay, Chip, IconChip, TextField } from '@/components/ui';
 import type { MovementType, PaymentMethod } from '@/models';
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -135,20 +135,14 @@ export default function CustomerDetailScreen() {
         }}
       />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior="padding"
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── BALANCE CARD ── */}
         <View style={[styles.balanceCard, hasDebt ? styles.balanceCardDebt : styles.balanceCardOk]}>
-          <Text style={[styles.balanceAmount, hasDebt ? styles.textDebt : styles.textOk]}>
-            ${customer.balance.toLocaleString('es-AR')}
-          </Text>
+          <AmountDisplay value={customer.balance} size="hero" tone={hasDebt ? 'danger' : 'success'} />
           <Text style={[styles.balanceStatus, hasDebt ? styles.textDebt : styles.textOk]}>
             {hasDebt ? 'debe' : 'al día'}
           </Text>
@@ -161,7 +155,6 @@ export default function CustomerDetailScreen() {
           ) : null}
         </View>
 
-        {/* ── ACCIONES ── */}
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.fiadoBtn]}
@@ -181,33 +174,28 @@ export default function CustomerDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── FORMULARIO INLINE ── */}
         {activeForm !== null && (
           <View style={styles.formCard}>
-            <Text style={styles.fieldLabel}>Monto *</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label="Monto *"
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
               placeholder="0"
-              placeholderTextColor={theme.colors.muted}
               autoFocus
+              containerStyle={styles.formField}
             />
 
             {activeForm === 'fiado' && (
-              <>
-                <Text style={styles.fieldLabel}>Descripción (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Ej: pan, bebidas, mercadería"
-                  placeholderTextColor={theme.colors.muted}
-                  autoCapitalize="sentences"
-                  returnKeyType="done"
-                />
-              </>
+              <TextField
+                label="Descripción (opcional)"
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Ej: pan, bebidas, mercadería"
+                autoCapitalize="sentences"
+                returnKeyType="done"
+                containerStyle={styles.formField}
+              />
             )}
 
             {activeForm === 'pago' && (
@@ -215,24 +203,12 @@ export default function CustomerDetailScreen() {
                 <Text style={styles.fieldLabel}>Método de cobro</Text>
                 <View style={styles.paymentMethodRow}>
                   {PAYMENT_METHODS.map((m) => (
-                    <TouchableOpacity
+                    <Chip
                       key={m.value}
-                      style={[
-                        styles.methodChip,
-                        paymentMethod === m.value && styles.methodChipSelected,
-                      ]}
+                      label={m.label}
+                      active={paymentMethod === m.value}
                       onPress={() => setPaymentMethod(m.value)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.methodChipText,
-                          paymentMethod === m.value && styles.methodChipTextSelected,
-                        ]}
-                      >
-                        {m.label}
-                      </Text>
-                    </TouchableOpacity>
+                    />
                   ))}
                 </View>
 
@@ -281,7 +257,6 @@ export default function CustomerDetailScreen() {
           </View>
         )}
 
-        {/* ── HISTORIAL ── */}
         <Text style={styles.historyTitle}>
           Historial{movements.length > 0 ? ` · ${movements.length} movimientos` : ''}
         </Text>
@@ -289,7 +264,10 @@ export default function CustomerDetailScreen() {
         {movementsLoading ? (
           <ActivityIndicator color={theme.colors.primary} style={styles.movementsLoader} />
         ) : movements.length === 0 ? (
-          <Text style={styles.emptyHistory}>Sin movimientos registrados.</Text>
+          <View style={styles.emptyHistory}>
+            <IconChip icon="receipt-outline" size="sm" tone="muted" />
+            <Text style={styles.emptyHistoryText}>Sin movimientos registrados.</Text>
+          </View>
         ) : (
           movements.map((m) => (
             <MovementItem key={m.id} movement={m} onAnnul={() => handleAnnul(m.id)} />
@@ -309,7 +287,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   notFound: {
-    fontSize: 16,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.textSecondary,
   },
   flex: {
@@ -321,14 +300,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    padding: 20,
+    padding: theme.spacing.xl,
     paddingBottom: 120,
   },
   balanceCard: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: theme.radius.cardLg,
+    padding: theme.spacing.xl,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
     borderWidth: 1.5,
   },
   balanceCardDebt: {
@@ -339,15 +318,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.successLight,
     borderColor: theme.colors.successMid,
   },
-  balanceAmount: {
-    fontSize: 48,
-    fontWeight: '800',
-    letterSpacing: -1.5,
-    lineHeight: 54,
-  },
   balanceStatus: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     marginTop: 2,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
@@ -362,12 +335,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   contactLine: {
-    fontSize: 14,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
   },
   contactRef: {
-    fontSize: 13,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
     color: theme.colors.muted,
     fontStyle: 'italic',
     marginTop: 2,
@@ -376,12 +350,12 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
   actionBtn: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: theme.spacing.lg,
+    borderRadius: theme.radius.button,
     alignItems: 'center',
   },
   fiadoBtn: {
@@ -394,8 +368,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.divider,
   },
   actionBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.body,
     letterSpacing: -0.2,
   },
   fiadoBtnText: {
@@ -409,65 +383,53 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: theme.radius.card,
+    padding: theme.spacing.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    marginBottom: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+    marginBottom: theme.spacing.lg,
+    ...theme.shadow.sm,
+  },
+  formField: {
+    marginBottom: theme.spacing.md,
   },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: theme.colors.background,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    padding: 13,
-    fontSize: 17,
-    color: theme.colors.text,
-    fontWeight: '600',
+    marginBottom: 8,
   },
   formActions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 16,
+    marginTop: theme.spacing.md,
   },
   cancelBtn: {
     flex: 1,
     paddingVertical: 13,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
   cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
   },
   confirmBtn: {
     flex: 2,
     paddingVertical: 13,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     alignItems: 'center',
   },
   confirmFiado: { backgroundColor: theme.colors.error },
   confirmPago: { backgroundColor: theme.colors.success },
   btnDisabled: { opacity: 0.6 },
   confirmBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: '#fff',
   },
   paymentMethodRow: {
@@ -475,15 +437,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
+    marginBottom: theme.spacing.md,
   },
   cashNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
   },
   cashNoticeOpen: {
     backgroundColor: theme.colors.successLight,
@@ -492,40 +454,26 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.divider,
   },
   cashNoticeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     flex: 1,
   },
-  methodChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-  },
-  methodChipSelected: {
-    borderColor: theme.colors.success,
-    backgroundColor: theme.colors.successMid,
-  },
-  methodChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  methodChipTextSelected: {
-    color: theme.colors.success,
-  },
   historyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.body,
     color: theme.colors.text,
     marginBottom: 4,
   },
   movementsLoader: { marginTop: 20 },
   emptyHistory: {
-    fontSize: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: theme.spacing.md,
+  },
+  emptyHistoryText: {
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.body,
     color: theme.colors.muted,
-    marginTop: 12,
   },
 });

@@ -1,18 +1,13 @@
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCashSession } from '@/hooks/useCashSession';
 import { useCashMovements } from '@/hooks/useCashMovements';
 import { useAuth } from '@/hooks/useAuth';
 import { annulCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
+import { ConfirmDialog } from '@/components/ui';
+import { EmptyState } from '@/components/EmptyState';
 import type { CashMovement } from '@/models';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -46,6 +41,7 @@ function MovementRow({
   movement: CashMovement;
   onAnnul?: () => void;
 }) {
+  const [confirmVisible, setConfirmVisible] = useState(false);
   const isIngreso = movement.type === 'ingreso';
   const isAnnulled = !!movement.annulled;
   const isReversal = !!movement.isReversal;
@@ -62,24 +58,9 @@ function MovementRow({
     ? '$' + Math.round(movement.amount).toLocaleString('es-AR')
     : (isIngreso ? '+' : '-') + '$' + Math.round(movement.amount).toLocaleString('es-AR');
 
-  function handleMenuPress() {
-    Alert.alert('Opciones', undefined, [
-      {
-        text: 'Anular movimiento',
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(
-            'Anular movimiento',
-            '¿Anulás este movimiento? Se creará un movimiento inverso. Esta acción no se puede deshacer.',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Anular', style: 'destructive', onPress: onAnnul },
-            ],
-          );
-        },
-      },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
+  function handleConfirmAnnul() {
+    setConfirmVisible(false);
+    onAnnul?.();
   }
 
   return (
@@ -96,13 +77,22 @@ function MovementRow({
         {canAnnul && (
           <TouchableOpacity
             style={styles.movMenuBtn}
-            onPress={handleMenuPress}
+            onPress={() => setConfirmVisible(true)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="ellipsis-vertical" size={20} color={theme.colors.muted} />
           </TouchableOpacity>
         )}
       </View>
+      <ConfirmDialog
+        visible={confirmVisible}
+        title="Anular movimiento"
+        message="¿Anulás este movimiento? Se creará un movimiento inverso. Esta acción no se puede deshacer."
+        confirmLabel="Anular"
+        variant="destructive"
+        onConfirm={handleConfirmAnnul}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }
@@ -137,11 +127,11 @@ export default function CashMovementsScreen() {
   if (movements.length === 0) {
     return (
       <View style={styles.center}>
-        <Ionicons name="receipt-outline" size={52} color={theme.colors.muted} />
-        <Text style={styles.emptyTitle}>Sin movimientos</Text>
-        <Text style={styles.emptySubtitle}>
-          Registrá un ingreso o gasto para verlo acá.
-        </Text>
+        <EmptyState
+          icon="receipt-outline"
+          title="Sin movimientos"
+          subtitle="Registrá un ingreso o gasto para verlo acá."
+        />
       </View>
     );
   }
@@ -175,41 +165,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: theme.colors.background,
-    gap: 10,
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.text,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
   },
   list: { flex: 1, backgroundColor: theme.colors.background },
-  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  listContent: { paddingHorizontal: theme.spacing.xl, paddingBottom: 40 },
   listCount: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '600',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-    paddingVertical: 14,
+    paddingVertical: theme.spacing.md,
   },
   movRow: {
-    paddingVertical: 14,
+    paddingVertical: theme.spacing.md,
     backgroundColor: theme.colors.background,
   },
   movRowAnnulled: {
     opacity: 0.55,
   },
   annulledBadge: {
+    fontFamily: theme.fontFamily.extrabold,
     fontSize: 10,
-    fontWeight: '800',
     color: theme.colors.muted,
     letterSpacing: 1.5,
     marginBottom: 4,
@@ -222,9 +198,9 @@ const styles = StyleSheet.create({
   movRowLeft: {
     flex: 1,
   },
-  movHour: { fontSize: 12, color: theme.colors.muted, fontWeight: '500', marginBottom: 4 },
-  movSubtitle: { fontSize: 15, fontWeight: '600', marginBottom: 5 },
-  movAmount: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  movHour: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.micro, color: theme.colors.muted, marginBottom: 4 },
+  movSubtitle: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.bodyLg, marginBottom: 5 },
+  movAmount: { fontFamily: theme.fontFamily.extrabold, fontSize: theme.font.h2, letterSpacing: -0.5 },
   movMenuBtn: {
     paddingLeft: 12,
     alignSelf: 'center',

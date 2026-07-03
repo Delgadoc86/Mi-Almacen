@@ -1,27 +1,26 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCashSession } from '@/hooks/useCashSession';
 import { addCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
+import { Button, Chip, InlineMessage, TextField } from '@/components/ui';
 import type { PaymentMethod } from '@/models';
+import type { IconName } from '@/components/ui';
 
-const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: string }[] = [
-  { value: 'efectivo',      label: 'Efectivo',      icon: 'cash-outline' },
-  { value: 'mercado_pago',  label: 'Mercado Pago',  icon: 'qr-code-outline' },
+const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: IconName }[] = [
+  { value: 'efectivo', label: 'Efectivo', icon: 'cash-outline' },
+  { value: 'mercado_pago', label: 'Mercado Pago', icon: 'qr-code-outline' },
   { value: 'transferencia', label: 'Transferencia', icon: 'swap-horizontal-outline' },
-  { value: 'otro',          label: 'Otro',          icon: 'ellipsis-horizontal-outline' },
+  { value: 'otro', label: 'Otro', icon: 'ellipsis-horizontal-outline' },
 ];
 
 export default function NewIncomeScreen() {
@@ -62,17 +61,13 @@ export default function NewIncomeScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior="padding"
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Monto */}
         <Text style={styles.sectionLabel}>Monto *</Text>
         <View style={styles.amountCard}>
           <Text style={styles.currencySign}>$</Text>
@@ -89,64 +84,34 @@ export default function NewIncomeScreen() {
           />
         </View>
 
-        {/* Medio de pago */}
         <Text style={styles.sectionLabel}>Medio de pago</Text>
         <View style={styles.chipsGrid}>
-          {PAYMENT_METHODS.map((m) => {
-            const active = medioPago === m.value;
-            return (
-              <TouchableOpacity
-                key={m.value}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setMedioPago(m.value)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={m.icon as never}
-                  size={20}
-                  color={active ? '#fff' : theme.colors.textSecondary}
-                />
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                  {m.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {PAYMENT_METHODS.map((m) => (
+            <Chip
+              key={m.value}
+              label={m.label}
+              icon={m.icon}
+              active={medioPago === m.value}
+              onPress={() => setMedioPago(m.value)}
+              style={styles.gridChip}
+            />
+          ))}
         </View>
 
-        {/* Descripción */}
-        <Text style={styles.sectionLabel}>Descripción (opcional)</Text>
-        <TextInput
-          style={styles.descInput}
+        <TextField
+          label="Descripción (opcional)"
           value={description}
           onChangeText={setDescription}
           placeholder="Ej: venta del día, cobro mercadería..."
-          placeholderTextColor={theme.colors.muted}
           autoCapitalize="sentences"
-          maxLength={80}
           returnKeyType="done"
           onSubmitEditing={handleSave}
+          containerStyle={styles.field}
         />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <InlineMessage variant="error" text={error} style={styles.field} /> : null}
 
-        <TouchableOpacity
-          style={[styles.saveBtn, !canSave && styles.btnDisabled]}
-          onPress={handleSave}
-          disabled={!canSave}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.saveBtnText}>GUARDAR INGRESO</Text>
-          )}
-        </TouchableOpacity>
+        <Button label="GUARDAR INGRESO" onPress={handleSave} loading={saving} disabled={!canSave} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -155,15 +120,15 @@ export default function NewIncomeScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xxl,
     paddingBottom: 100,
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
-    marginBottom: 10,
+    marginBottom: theme.spacing.md,
     letterSpacing: 0.2,
   },
   amountCard: {
@@ -172,21 +137,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: theme.radius.xl,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: 12,
-    marginBottom: 24,
+    marginBottom: theme.spacing.xxl,
   },
   currencySign: {
-    fontSize: 36,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.display,
     color: theme.colors.text,
     marginRight: 4,
   },
   amountInput: {
     flex: 1,
-    fontSize: 48,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.displayLg,
     color: theme.colors.text,
     padding: 0,
   },
@@ -194,81 +159,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: theme.spacing.xxl,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 48,
+  gridChip: {
     flex: 1,
     minWidth: '45%',
+    height: 48,
   },
-  chipActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
+  field: {
+    marginBottom: theme.spacing.xl,
   },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  chipTextActive: { color: '#fff' },
-  descInput: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: theme.colors.text,
-    marginBottom: 20,
-    minHeight: 52,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  saveBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  btnDisabled: { opacity: 0.4, shadowOpacity: 0, elevation: 0 },
 });

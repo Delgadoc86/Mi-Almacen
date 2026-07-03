@@ -1,13 +1,8 @@
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { useCashHistory } from '@/hooks/useCashHistory';
 import { theme } from '@/theme';
+import { AmountDisplay, Card } from '@/components/ui';
+import { EmptyState } from '@/components/EmptyState';
 import type { CashSession } from '@/models';
 
 function formatARS(amount: number): string {
@@ -43,7 +38,7 @@ function SessionCard({ session, number }: { session: CashSession; number: number
   const saldoFinal = getSaldoFinal(session);
 
   return (
-    <View style={[styles.card, isOpen && styles.cardOpen]}>
+    <Card style={[styles.card, isOpen && styles.cardOpen]}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardNumber}>Caja #{number}</Text>
         <View style={[styles.badge, isOpen ? styles.badgeOpen : styles.badgeClosed]}>
@@ -93,12 +88,10 @@ function SessionCard({ session, number }: { session: CashSession; number: number
         </View>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>{isOpen ? 'Saldo actual' : 'Saldo final'}</Text>
-          <Text style={[styles.statValue, styles.statValueFinal, saldoFinal < 0 && styles.textDanger]}>
-            {formatARS(saldoFinal)}
-          </Text>
+          <AmountDisplay value={saldoFinal} size="md" tone={saldoFinal < 0 ? 'danger' : 'default'} style={styles.statValueFinal} />
         </View>
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -119,12 +112,12 @@ export default function CashHistoryScreen() {
 
   if (sessions.length === 0) {
     return (
-      <View style={styles.center}>
-        <Ionicons name="time-outline" size={52} color={theme.colors.muted} />
-        <Text style={styles.emptyTitle}>Sin historial</Text>
-        <Text style={styles.emptySubtitle}>
-          Las cajas cerradas van a aparecer acá.
-        </Text>
+      <View style={styles.emptyWrap}>
+        <EmptyState
+          icon="time-outline"
+          title="Sin historial"
+          subtitle="Las cajas cerradas van a aparecer acá."
+        />
       </View>
     );
   }
@@ -157,39 +150,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: theme.colors.background,
-    gap: 10,
-    paddingHorizontal: 32,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.text,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
+  emptyWrap: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
   },
 
   list: { flex: 1, backgroundColor: theme.colors.background },
-  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  listContent: { paddingHorizontal: theme.spacing.xl, paddingBottom: 40 },
   listCount: {
-    fontSize: 12,
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '600',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-    paddingVertical: 16,
+    paddingVertical: theme.spacing.lg,
   },
 
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 18,
+    padding: theme.spacing.lg + 2,
   },
   cardOpen: {
     borderColor: theme.colors.successMid,
@@ -200,35 +179,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: theme.spacing.md,
   },
   cardNumber: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.text,
     letterSpacing: -0.3,
   },
   badge: {
-    borderRadius: 8,
+    borderRadius: theme.radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   badgeOpen: { backgroundColor: theme.colors.successMid },
   badgeClosed: { backgroundColor: theme.colors.divider },
-  badgeText: { fontSize: 12, fontWeight: '700' },
+  badgeText: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.caption },
   badgeTextOpen: { color: theme.colors.success },
   badgeTextClosed: { color: theme.colors.textSecondary },
 
-  infoBlock: { gap: 6, marginBottom: 14 },
+  infoBlock: { gap: 6, marginBottom: theme.spacing.md },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  infoLabel: { fontSize: 13, color: theme.colors.muted, fontWeight: '500' },
-  infoValue: { fontSize: 13, color: theme.colors.text, fontWeight: '600' },
+  infoLabel: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.muted },
+  infoValue: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.caption, color: theme.colors.text },
 
-  divider: { height: 1, backgroundColor: theme.colors.divider, marginBottom: 14 },
+  divider: { height: 1, backgroundColor: theme.colors.divider, marginBottom: theme.spacing.md },
 
   statsRow: {
     flexDirection: 'row',
@@ -236,16 +215,15 @@ const styles = StyleSheet.create({
   },
   stat: { alignItems: 'flex-start', flex: 1 },
   statLabel: {
-    fontSize: 11,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
-    fontWeight: '600',
     marginBottom: 3,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  statValue: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
-  statValueFinal: { fontSize: 16, fontWeight: '800', color: theme.colors.text },
+  statValue: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.body, color: theme.colors.text },
+  statValueFinal: { fontSize: theme.font.h3 },
 
-  separator: { height: 12 },
-  textDanger: { color: theme.colors.error },
+  separator: { height: theme.spacing.md },
 });

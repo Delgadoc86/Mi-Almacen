@@ -1,14 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +7,7 @@ import { useCustomer } from '@/hooks/useCustomer';
 import { useCustomerMovements } from '@/hooks/useCustomerMovements';
 import { updateCustomer, deleteCustomer } from '@/services/customers';
 import { theme } from '@/theme';
+import { AmountDisplay, Button, ConfirmDialog, InlineMessage, TextField } from '@/components/ui';
 
 export default function EditCustomerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,6 +22,7 @@ export default function EditCustomerScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
   useEffect(() => {
     if (customer) {
@@ -62,8 +55,9 @@ export default function EditCustomerScreen() {
     }
   }
 
-  async function handleDelete() {
+  async function handleConfirmDelete() {
     if (!userProfile?.businessId || !id) return;
+    setConfirmDeleteVisible(false);
     setDeleting(true);
     try {
       await deleteCustomer(userProfile.businessId, id);
@@ -95,25 +89,24 @@ export default function EditCustomerScreen() {
   const hasMovements = !movementsLoading && movements.length > 0;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior="padding"
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── INFO CARD ── */}
         <View style={[styles.infoCard, hasDebt ? styles.infoCardDebt : styles.infoCardOk]}>
           <Text style={styles.customerName} numberOfLines={2}>
             {customer.name}
           </Text>
           <View style={styles.infoRow}>
-            <Text style={[styles.balanceText, hasDebt ? styles.textDebt : styles.textOk]}>
-              ${customer.balance.toLocaleString('es-AR')} {hasDebt ? 'debe' : 'al día'}
-            </Text>
+            <View style={styles.balanceRow}>
+              <AmountDisplay value={customer.balance} size="md" tone={hasDebt ? 'danger' : 'success'} />
+              <Text style={[styles.balanceSuffix, hasDebt ? styles.textDebt : styles.textOk]}>
+                {hasDebt ? 'debe' : 'al día'}
+              </Text>
+            </View>
             {!movementsLoading && (
               <Text style={styles.movementsText}>
                 {movements.length === 0
@@ -124,73 +117,53 @@ export default function EditCustomerScreen() {
           </View>
         </View>
 
-        {/* ── NOTICE ── */}
-        <View style={styles.noticeBox}>
-          <Ionicons name="information-circle-outline" size={15} color={theme.colors.primary} />
-          <Text style={styles.noticeText}>
-            Los cambios se aplican únicamente al nombre y datos de contacto. El historial y los saldos no serán modificados.
-          </Text>
-        </View>
+        <InlineMessage
+          variant="info"
+          text="Los cambios se aplican únicamente al nombre y datos de contacto. El historial y los saldos no serán modificados."
+          style={styles.notice}
+        />
 
-        {/* ── FORM ── */}
-        <Text style={styles.fieldLabel}>Nombre *</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Nombre *"
           value={name}
           onChangeText={(t) => { setName(t); setError(''); }}
           placeholder="Ej: Juan Pérez"
-          placeholderTextColor={theme.colors.muted}
-          maxLength={60}
           autoCapitalize="words"
           returnKeyType="next"
+          containerStyle={styles.field}
         />
 
-        <Text style={styles.fieldLabel}>Teléfono (opcional)</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Teléfono (opcional)"
           value={phone}
           onChangeText={setPhone}
           placeholder="Ej: 11 2345-6789"
-          placeholderTextColor={theme.colors.muted}
           keyboardType="phone-pad"
-          maxLength={20}
           returnKeyType="next"
+          containerStyle={styles.field}
         />
 
-        <Text style={styles.fieldLabel}>Referencia / nota (opcional)</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label="Referencia / nota (opcional)"
           value={reference}
           onChangeText={setReference}
           placeholder="Ej: Doña Pocha, vecina de la esquina"
-          placeholderTextColor={theme.colors.muted}
-          maxLength={80}
           autoCapitalize="sentences"
           returnKeyType="done"
           onSubmitEditing={handleSave}
+          containerStyle={styles.field}
         />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <InlineMessage variant="error" text={error} style={styles.field} /> : null}
 
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && styles.btnDisabled]}
+        <Button
+          label="Guardar cambios"
           onPress={handleSave}
-          disabled={saving || deleting}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.saveBtnText}>Guardar cambios</Text>
-          )}
-        </TouchableOpacity>
+          loading={saving}
+          disabled={deleting}
+          style={styles.saveBtn}
+        />
 
-        {/* ── ELIMINAR ── */}
         <Text style={styles.sectionLabel}>ELIMINAR CLIENTE</Text>
 
         {movementsLoading ? (
@@ -204,23 +177,26 @@ export default function EditCustomerScreen() {
             </Text>
           </View>
         ) : canDelete ? (
-          <TouchableOpacity
-            style={[styles.deleteBtn, deleting && styles.btnDisabled]}
-            onPress={handleDelete}
-            disabled={saving || deleting}
-            activeOpacity={0.85}
-          >
-            {deleting ? (
-              <ActivityIndicator color={theme.colors.error} size="small" />
-            ) : (
-              <>
-                <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
-                <Text style={styles.deleteBtnText}>Eliminar cliente</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <Button
+            label="Eliminar cliente"
+            variant="danger"
+            icon="trash-outline"
+            onPress={() => setConfirmDeleteVisible(true)}
+            loading={deleting}
+            disabled={saving}
+          />
         ) : null}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={confirmDeleteVisible}
+        title="Eliminar cliente"
+        message={`¿Eliminás a "${customer.name}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        variant="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -234,21 +210,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   notFound: {
-    fontSize: 16,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.bodyLg,
     color: theme.colors.textSecondary,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.xl,
     paddingBottom: 100,
   },
 
-  // Info card
   infoCard: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: theme.radius.cardLg,
+    padding: theme.spacing.xl,
     borderWidth: 1.5,
-    marginBottom: 14,
+    marginBottom: theme.spacing.md,
   },
   infoCardDebt: {
     backgroundColor: theme.colors.dangerLight,
@@ -259,12 +235,11 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.successMid,
   },
   customerName: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: theme.font.h1,
     color: theme.colors.text,
     letterSpacing: -0.5,
     marginBottom: 8,
-    lineHeight: 34,
   },
   infoRow: {
     flexDirection: 'row',
@@ -273,111 +248,44 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  balanceText: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  balanceSuffix: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.body,
   },
   textDebt: { color: theme.colors.error },
   textOk: { color: theme.colors.success },
   movementsText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
   },
 
-  // Notice
-  noticeBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.primaryMid,
-    borderWidth: 1,
-    borderColor: theme.colors.primaryLight,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 24,
-  },
-  noticeText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.primary,
-    fontWeight: '500',
-    lineHeight: 18,
+  notice: {
+    marginBottom: theme.spacing.xxl,
   },
 
-  // Form
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    marginBottom: 7,
-    letterSpacing: 0.2,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    backgroundColor: theme.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: theme.colors.dangerMid,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.error,
-    fontWeight: '500',
-    lineHeight: 18,
+  field: {
+    marginBottom: theme.spacing.lg,
   },
 
-  // Save button
   saveBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingVertical: 17,
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-    minHeight: 54,
-    justifyContent: 'center',
+    marginBottom: theme.spacing.xxxl,
   },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  btnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
 
-  // Delete section
   sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.micro,
     color: theme.colors.muted,
     letterSpacing: 1.5,
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
   movementsLoader: {
-    marginVertical: 12,
+    marginVertical: theme.spacing.md,
   },
   cannotDeleteBox: {
     flexDirection: 'row',
@@ -386,32 +294,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   cannotDeleteText: {
     flex: 1,
-    fontSize: 13,
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
     lineHeight: 18,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 16,
-    paddingVertical: 16,
-    borderWidth: 1.5,
-    borderColor: theme.colors.dangerMid,
-    backgroundColor: theme.colors.dangerLight,
-    minHeight: 54,
-  },
-  deleteBtnText: {
-    color: theme.colors.error,
-    fontSize: 16,
-    fontWeight: '700',
   },
 });

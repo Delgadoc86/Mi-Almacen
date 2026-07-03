@@ -1,17 +1,8 @@
-import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/components/EmptyState';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +10,7 @@ import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useCategories';
 import { buildPdfHtml, generatePdfFilename } from '@/utils/pdfTemplate';
 import { theme } from '@/theme';
+import { Button, Card, Chip, IconChip } from '@/components/ui';
 
 type SavedPdf = {
   uri: string;
@@ -33,14 +25,42 @@ export default function PricesScreen() {
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState<SavedPdf | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('all');
 
-  const productCount = products.length;
-  const categoryCount = categories.length;
   const businessName = business?.name ?? 'Mi Almacén';
+
+  const categoryOptions = useMemo(
+    () => [{ id: 'all', name: 'Todas las categorías' }, ...categories],
+    [categories],
+  );
+  const selectedCategory = selectedCategoryId === 'all'
+    ? null
+    : categories.find((c) => c.id === selectedCategoryId) ?? null;
+
+  const filteredProducts = useMemo(
+    () => (selectedCategoryId === 'all'
+      ? products
+      : products.filter((p) => p.categoryId === selectedCategoryId)),
+    [products, selectedCategoryId],
+  );
+  const filteredCategories = selectedCategory ? [selectedCategory] : categories;
+
+  const productCount = filteredProducts.length;
+  const categoryCount = filteredCategories.length;
+
+  function handleSelectCategory(id: string) {
+    setSelectedCategoryId(id);
+    setSaved(null);
+  }
 
   async function handleGenerate() {
     if (productCount === 0) {
-      Alert.alert('Sin productos', 'Agregá productos antes de generar la lista.');
+      Alert.alert(
+        'Sin productos',
+        selectedCategory
+          ? `No hay productos cargados en "${selectedCategory.name}".`
+          : 'Agregá productos antes de generar la lista.',
+      );
       return;
     }
     if (!FileSystem.documentDirectory) {
@@ -51,10 +71,10 @@ export default function PricesScreen() {
     setGenerating(true);
     setSaved(null);
     try {
-      const html = buildPdfHtml(businessName, products, categories);
+      const html = buildPdfHtml(businessName, filteredProducts, filteredCategories, selectedCategory?.name);
       const { uri: tmpUri } = await Print.printToFileAsync({ html, base64: false });
 
-      const filename = `${generatePdfFilename(businessName)}.pdf`;
+      const filename = `${generatePdfFilename(businessName, selectedCategory?.name)}.pdf`;
       const finalUri = `${FileSystem.documentDirectory}${filename}`;
 
       const info = await FileSystem.getInfoAsync(finalUri);
@@ -131,7 +151,7 @@ export default function PricesScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {productCount === 0 ? (
+        {products.length === 0 ? (
           <EmptyState
             icon="document-text-outline"
             title="Sin productos todavía"
@@ -139,20 +159,40 @@ export default function PricesScreen() {
           />
         ) : (
           <>
-            {/* Resumen */}
-            <View style={styles.summaryCard}>
+            {categories.length > 0 && (
+              <>
+                <Text style={styles.filterLabel}>Categoría a imprimir</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  {categoryOptions.map((cat) => (
+                    <Chip
+                      key={cat.id}
+                      label={cat.name}
+                      active={selectedCategoryId === cat.id}
+                      onPress={() => handleSelectCategory(cat.id)}
+                      style={styles.chipSpacing}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
+            <Card style={styles.summaryCard} variant="elevated">
               <View style={styles.summaryRow}>
-                <View style={styles.summaryIconWrap}>
-                  <Ionicons name="document-text" size={26} color={theme.colors.primary} />
-                </View>
+                <IconChip icon="document-text" size="lg" tone="primary" />
                 <View style={styles.summaryBody}>
                   <Text style={styles.summaryCount}>
                     {productCount} {productCount === 1 ? 'producto' : 'productos'}
                   </Text>
                   <Text style={styles.summaryDesc}>
-                    {categoryCount > 0
-                      ? `en ${categoryCount} ${categoryCount === 1 ? 'categoría' : 'categorías'}`
-                      : 'sin categoría asignada'}
+                    {selectedCategory
+                      ? selectedCategory.name
+                      : categoryCount > 0
+                        ? `en ${categoryCount} ${categoryCount === 1 ? 'categoría' : 'categorías'}`
+                        : 'sin categoría asignada'}
                   </Text>
                 </View>
               </View>
@@ -160,35 +200,24 @@ export default function PricesScreen() {
               <Text style={styles.summaryNote}>
                 Columna{' '}
                 <Text style={styles.summaryNoteEm}>Nuevo precio</Text> vacía para anotar a mano.
-                Escala tipográfica adaptada a la cantidad de productos.
+                Letra grande para encontrar productos rápido.
               </Text>
-            </View>
+            </Card>
 
             {!saved && (
-              <TouchableOpacity
-                style={[styles.primaryBtn, generating && styles.btnOff]}
+              <Button
+                label={selectedCategory ? `Generar lista · ${selectedCategory.name}` : 'Generar lista completa'}
+                icon="print-outline"
                 onPress={handleGenerate}
-                disabled={generating}
-                activeOpacity={0.8}
-              >
-                {generating ? (
-                  <View style={styles.btnRow}>
-                    <ActivityIndicator color="#fff" size="small" />
-                    <Text style={styles.primaryBtnLabel}>Generando...</Text>
-                  </View>
-                ) : (
-                  <View style={styles.btnRow}>
-                    <Ionicons name="print-outline" size={22} color="#fff" />
-                    <Text style={styles.primaryBtnLabel}>Generar lista</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+                loading={generating}
+                disabled={productCount === 0}
+              />
             )}
 
             {saved && (
-              <View style={styles.resultCard}>
+              <Card style={styles.resultCard} variant="elevated">
                 <View style={styles.successRow}>
-                  <Ionicons name="checkmark-circle" size={22} color={theme.colors.success} />
+                  <IconChip icon="checkmark-circle" size="sm" tone="success" filled />
                   <Text style={styles.successLabel}>Lista generada correctamente</Text>
                 </View>
 
@@ -203,57 +232,17 @@ export default function PricesScreen() {
                   </Text>
                 </View>
 
-                <TouchableOpacity
-                  style={[styles.outlineBtn, loading && styles.btnOff]}
-                  onPress={handleOpen}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.btnRow}>
-                    <Ionicons name="eye-outline" size={20} color={theme.colors.primary} />
-                    <Text style={styles.outlineBtnLabel}>Abrir PDF</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.outlineBtn, loading && styles.btnOff]}
+                <Button label="Abrir PDF" variant="outline" icon="eye-outline" onPress={handleOpen} disabled={loading} />
+                <Button
+                  label={loading ? 'Un momento...' : 'Imprimir'}
+                  variant="outline"
+                  icon="print-outline"
                   onPress={handlePrint}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <View style={styles.btnRow}>
-                      <ActivityIndicator color={theme.colors.primary} size="small" />
-                      <Text style={styles.outlineBtnLabel}>Un momento...</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.btnRow}>
-                      <Ionicons name="print-outline" size={20} color={theme.colors.primary} />
-                      <Text style={styles.outlineBtnLabel}>Imprimir</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.primaryBtn, loading && styles.btnOff]}
-                  onPress={handleShare}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.btnRow}>
-                    <Ionicons name="share-outline" size={20} color="#fff" />
-                    <Text style={styles.primaryBtnLabel}>Compartir PDF</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.ghostBtn}
-                  onPress={() => setSaved(null)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.ghostBtnLabel}>Generar de nuevo</Text>
-                </TouchableOpacity>
-              </View>
+                  loading={loading}
+                />
+                <Button label="Compartir PDF" icon="share-outline" onPress={handleShare} disabled={loading} />
+                <Button label="Generar de nuevo" variant="ghost" onPress={() => setSaved(null)} />
+              </Card>
             )}
           </>
         )}
@@ -265,98 +254,89 @@ export default function PricesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.xl, paddingBottom: 48 },
+
+  filterLabel: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.2,
+    marginBottom: theme.spacing.md,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    paddingBottom: theme.spacing.lg,
+  },
+  chipSpacing: {
+    marginRight: 8,
+  },
 
   summaryCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginBottom: 20,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  summaryIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   summaryBody: { flex: 1 },
-  summaryCount: { fontSize: 18, fontWeight: '700', color: theme.colors.text },
-  summaryDesc: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2, fontWeight: '500' },
-  divider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: 14 },
-  summaryNote: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20, fontWeight: '500' },
-  summaryNoteEm: { fontWeight: '700', color: theme.colors.text },
-
-  btnRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  btnOff: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
-
-  primaryBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 18,
-    paddingVertical: 17,
-    alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 4,
+  summaryCount: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.h3,
+    color: theme.colors.text,
   },
-  primaryBtnLabel: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  summaryDesc: {
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  divider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: 14 },
+  summaryNote: {
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  summaryNoteEm: {
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.text,
+  },
 
   resultCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 12,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.md,
   },
   successRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  successLabel: { fontSize: 15, fontWeight: '700', color: theme.colors.success },
+  successLabel: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.body,
+    color: theme.colors.success,
+  },
 
   fileBox: {
     backgroundColor: theme.colors.background,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     padding: 14,
   },
   fileBoxTitle: {
+    fontFamily: theme.fontFamily.bold,
     fontSize: 10,
-    fontWeight: '700',
     color: theme.colors.muted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  fileBoxName: { fontSize: 13, fontWeight: '600', color: theme.colors.text, lineHeight: 18 },
-  fileBoxDivider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: 10 },
-  fileBoxNote: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19, fontWeight: '500' },
-
-  outlineBtn: {
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
+  fileBoxName: {
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.caption,
+    color: theme.colors.text,
+    lineHeight: 18,
   },
-  outlineBtnLabel: { color: theme.colors.primary, fontSize: 15, fontWeight: '700' },
-
-  ghostBtn: { alignItems: 'center', paddingVertical: 6 },
-  ghostBtnLabel: { fontSize: 14, color: theme.colors.muted, fontWeight: '600' },
+  fileBoxDivider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: 10 },
+  fileBoxNote: {
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.caption,
+    color: theme.colors.textSecondary,
+    lineHeight: 19,
+  },
 });
