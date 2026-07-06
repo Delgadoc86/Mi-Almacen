@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mi Almacén — Generador de íconos</title>
+<style>
+  :root {
+    --primary: #0F4C81;
+    --primary-dark: #0A3560;
+    --primary-light: #E9F1FA;
+    --accent: #C2542D;
+    --accent-light: #F7E9E2;
+    --bg: #F5F7FA;
+    --surface: #FFFFFF;
+    --text: #16213A;
+    --muted: #5B6B85;
+    --border: #E3E8F0;
+    --success: #1E8E5A;
+    --success-light: #EEF8F2;
+    --error: #C22E2E;
+    --error-light: #FBEEEE;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    background: linear-gradient(135deg, #14568F 0%, var(--primary) 55%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 40px 24px 32px;
+  }
+
+  header .inner {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  header p {
+    margin: 0;
+    color: rgba(255,255,255,0.82);
+    font-size: 14.5px;
+    line-height: 1.5;
+    max-width: 640px;
+  }
+
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  .banner {
+    display: none;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .banner.show { display: flex; }
+
+  .banner.error {
+    background: var(--error-light);
+    border: 1px solid #F0C7C7;
+    color: #7A1F1F;
+  }
+
+  .banner.ok {
+    background: var(--success-light);
+    border: 1px solid #C9E7D5;
+    color: #135C3D;
+  }
+
+  .banner code {
+    background: rgba(0,0,0,0.06);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+
+  .banner strong { display: block; margin-bottom: 4px; font-size: 14.5px; }
+
+  section.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+  }
+
+  section.card h2 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  section.card .sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 18px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 16px;
+  }
+
+  .tile {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    background: #FBFCFE;
+  }
+
+  .tile .swatch {
+    width: 96px;
+    height: 96px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      linear-gradient(45deg, #eee 25%, transparent 25%) -8px 0/16px 16px,
+      linear-gradient(-45deg, #eee 25%, transparent 25%) -8px 0/16px 16px,
+      linear-gradient(45deg, transparent 75%, #eee 75%) -8px 0/16px 16px,
+      linear-gradient(-45deg, transparent 75%, #eee 75%) -8px 0/16px 16px,
+      #fff;
+    background-size: 16px 16px;
+    overflow: hidden;
+  }
+
+  .tile canvas {
+    max-width: 100%;
+    max-height: 100%;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  .tile .name {
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: center;
+    word-break: break-all;
+  }
+
+  .tile .dims {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: -6px;
+  }
+
+  .tile button {
+    width: 100%;
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .tile button:hover { background: var(--primary-dark); }
+  .tile button:disabled { background: #B7C2D6; cursor: not-allowed; }
+
+  #downloadAll {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  #downloadAll:hover { background: #A6431F; }
+  #downloadAll:disabled { background: #D8B9AC; cursor: not-allowed; }
+
+  .palette-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+    background: #FBFCFE;
+    border: 1px solid var(--border);
+    padding: 6px 10px 6px 6px;
+    border-radius: 999px;
+  }
+
+  .chip .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+
+  ol.steps {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13.5px;
+    line-height: 1.9;
+    color: var(--text);
+  }
+
+  ol.steps code {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 12.5px;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 24px 0 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>Mi Almacén — Generador de íconos</h1>
+    <p>
+      Renderiza <code style="background:rgba(255,255,255,0.15); padding:2px 6px; border-radius:5px;">assets/icon.svg</code>
+      y exporta cada variante en su tamaño correcto para Expo/EAS. No sube nada a internet: todo se procesa
+      en tu navegador con &lt;canvas&gt;.
+    </p>
+  </div>
+</header>
+
+<main>
+
+  <div id="errorBanner" class="banner error">
+    <div>
+      <strong>No se pudo cargar assets/icon.svg</strong>
+      Este archivo se abrió directamente desde el disco (protocolo <code>file://</code>), y los navegadores
+      bloquean la lectura de otros archivos locales por seguridad (CORS).
+      <br><br>
+      Ejecutá esto desde la raíz del proyecto y volvé a abrir la página desde la URL que te indique:
+      <br><br>
+      <code>npx serve .</code>
+      <br><br>
+      Luego abrí algo como <code>http://localhost:3000/scripts/generate-icons.html</code> en tu navegador.
+    </div>
+  </div>
+
+  <div id="okBanner" class="banner ok">
+    <div>
+      <strong>SVG cargado correctamente</strong>
+      Se generaron las 6 variantes a partir de <code>assets/icon.svg</code>. Podés descargarlas una por una
+      o todas juntas con el botón de abajo.
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Paleta de marca</h2>
+    <p class="sub">Identidad "Azul Puerto" + "Terracota Almacén", ya en uso en toda la app (src/theme).</p>
+    <div class="palette-row">
+      <div class="chip"><span class="dot" style="background:#0F4C81"></span>Primary #0F4C81</div>
+      <div class="chip"><span class="dot" style="background:#0A3560"></span>Primary Dark #0A3560</div>
+      <div class="chip"><span class="dot" style="background:#C2542D"></span>Accent #C2542D</div>
+      <div class="chip"><span class="dot" style="background:#F7F1E6"></span>Paper #F7F1E6</div>
+      <div class="chip"><span class="dot" style="background:#16213A"></span>Ink #16213A</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Assets generados</h2>
+    <p class="sub">Cada tarjeta muestra una vista previa real (mismo render que se descarga).</p>
+    <div class="grid" id="grid"><!-- tiles inyectados por JS --></div>
+    <div style="margin-top:20px; text-align:center;">
+      <button id="downloadAll" disabled>Descargar todo (.zip no incluido — descarga individual x6)</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Instrucciones</h2>
+    <ol class="steps">
+      <li>Serví el proyecto desde la raíz: <code>npx serve .</code></li>
+      <li>Abrí <code>scripts/generate-icons.html</code> desde la URL local que te muestre (ej. <code>http://localhost:3000/scripts/generate-icons.html</code>).</li>
+      <li>Verificá el preview de las 6 tarjetas — deben verse iguales a las de esta página.</li>
+      <li>Descargá cada archivo con su botón; se guardan en tu carpeta de Descargas con el nombre correcto.</li>
+      <li>Movelos a la carpeta <code>assets/</code> del proyecto, reemplazando los archivos existentes.</li>
+      <li>Corré <code>npx expo start -c</code> para limpiar caché y ver los nuevos íconos.</li>
+    </ol>
+  </section>
+
+</main>
+
+<footer>Mi Almacén · generador de íconos · sin dependencias externas</footer>
+
+<script>
+(function () {
+  var SVG_PATH = "../assets/icon.svg";
+
+  var VARIANTS = [
+    { id: "icon",        file: "icon.png",                      size: 1024, mode: "full" },
+    { id: "foreground",  file: "android-icon-foreground.png",   size: 1024, mode: "glyph" },
+    { id: "background",  file: "android-icon-background.png",   size: 1024, mode: "bg" },
+    { id: "monochrome",  file: "android-icon-monochrome.png",    size: 1024, mode: "mono" },
+    { id: "splash",      file: "splash-icon.png",                size: 512,  mode: "full" },
+    { id: "favicon",     file: "favicon.png",                    size: 64,   mode: "full" }
+  ];
+
+  var grid = document.getElementById("grid");
+  var errorBanner = document.getElementById("errorBanner");
+  var okBanner = document.getElementById("okBanner");
+  var downloadAllBtn = document.getElementById("downloadAll");
+
+  var generated = {}; // id -> { blob, filename }
+
+  function buildTile(variant) {
+    var tile = document.createElement("div");
+    tile.className = "tile";
+
+    var swatch = document.createElement("div");
+    swatch.className = "swatch";
+    var canvas = document.createElement("canvas");
+    canvas.width = variant.size;
+    canvas.height = variant.size;
+    canvas.style.width = Math.min(variant.size, 96) + "px";
+    canvas.style.height = Math.min(variant.size, 96) + "px";
+    swatch.appendChild(canvas);
+
+    var name = document.createElement("div");
+    name.className = "name";
+    name.textContent = variant.file;
+
+    var dims = document.createElement("div");
+    dims.className = "dims";
+    dims.textContent = variant.size + " × " + variant.size + " px";
+
+    var btn = document.createElement("button");
+    btn.textContent = "Descargar";
+    btn.disabled = true;
+    btn.addEventListener("click", function () {
+      var entry = generated[variant.id];
+      if (!entry) return;
+      triggerDownload(entry.blob, entry.filename);
+    });
+
+    tile.appendChild(swatch);
+    tile.appendChild(name);
+    tile.appendChild(dims);
+    tile.appendChild(btn);
+    grid.appendChild(tile);
+
+    return { canvas: canvas, button: btn };
+  }
+
+  var tiles = {};
+  VARIANTS.forEach(function (v) {
+    tiles[v.id] = buildTile(v);
+  });
+
+  function triggerDownload(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function buildVariantSvgText(svgText, mode) {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(svgText, "image/svg+xml");
+    var bg = doc.getElementById("bg");
+    var glyph = doc.getElementById("glyph");
+
+    if (mode === "glyph" || mode === "mono") {
+      if (bg) bg.parentNode.removeChild(bg);
+    }
+    if (mode === "bg") {
+      if (glyph) glyph.parentNode.removeChild(glyph);
+    }
+    if (mode === "mono" && glyph) {
+      var painted = glyph.querySelectorAll("[fill]");
+      for (var i = 0; i < painted.length; i++) {
+        painted[i].setAttribute("fill", "#FFFFFF");
+      }
+    }
+
+    return new XMLSerializer().serializeToString(doc);
+  }
+
+  function renderVariant(svgText, variant) {
+    return new Promise(function (resolve, reject) {
+      var variantSvgText = buildVariantSvgText(svgText, variant.mode);
+      var svgBlob = new Blob([variantSvgText], { type: "image/svg+xml;charset=utf-8" });
+      var url = URL.createObjectURL(svgBlob);
+      var img = new Image();
+
+      img.onload = function () {
+        var canvasTarget = tiles[variant.id].canvas;
+        var ctx = canvasTarget.getContext("2d");
+        ctx.clearRect(0, 0, variant.size, variant.size);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, variant.size, variant.size);
+        URL.revokeObjectURL(url);
+
+        canvasTarget.toBlob(function (blob) {
+          generated[variant.id] = { blob: blob, filename: variant.file };
+          tiles[variant.id].button.disabled = false;
+          resolve();
+        }, "image/png");
+      };
+
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("No se pudo rasterizar la variante " + variant.id));
+      };
+
+      img.src = url;
+    });
+  }
+
+  fetch(SVG_PATH)
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.text();
+    })
+    .then(function (svgText) {
+      return Promise.all(VARIANTS.map(function (v) { return renderVariant(svgText, v); }));
+    })
+    .then(function () {
+      okBanner.classList.add("show");
+      downloadAllBtn.disabled = false;
+      downloadAllBtn.textContent = "Descargar los 6 archivos";
+      downloadAllBtn.addEventListener("click", function () {
+        VARIANTS.forEach(function (v, idx) {
+          setTimeout(function () {
+            var entry = generated[v.id];
+            if (entry) triggerDownload(entry.blob, entry.filename);
+          }, idx * 350); // espaciado para que el navegador no bloquee descargas múltiples
+        });
+      });
+    })
+    .catch(function (err) {
+      console.error(err);
+      errorBanner.classList.add("show");
+    });
+})();
+</script>
+
+</body>
+</html>

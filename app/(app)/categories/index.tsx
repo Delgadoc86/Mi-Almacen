@@ -12,17 +12,20 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { createCategory, deleteCategory } from '@/services/categories';
 import { getCategoryProductCount } from '@/services/products';
 import { DEFAULT_CATEGORY_IDS } from '@/constants';
 import { theme } from '@/theme';
 import { ConfirmDialog } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import type { Category } from '@/models';
 
 export default function CategoriesScreen() {
   const { userProfile } = useAuth();
   const { categories, loading } = useCategories();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -96,7 +99,7 @@ export default function CategoriesScreen() {
           <ActivityIndicator size="small" color={theme.colors.error} />
         ) : (
           <TouchableOpacity
-            onPress={() => handleRequestDelete(item)}
+            onPress={() => requireWrite(() => handleRequestDelete(item))}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
@@ -118,11 +121,11 @@ export default function CategoriesScreen() {
           maxLength={40}
           autoCapitalize="sentences"
           returnKeyType="done"
-          onSubmitEditing={handleAdd}
+          onSubmitEditing={() => requireWrite(handleAdd)}
         />
         <TouchableOpacity
           style={[styles.addBtn, (!newName.trim() || adding) && styles.addBtnDisabled]}
-          onPress={handleAdd}
+          onPress={() => requireWrite(handleAdd)}
           disabled={!newName.trim() || adding}
         >
           {adding ? (
@@ -154,9 +157,10 @@ export default function CategoriesScreen() {
         message={pendingDelete ? `¿Eliminar "${pendingDelete.name}"?` : undefined}
         confirmLabel="Eliminar"
         variant="destructive"
-        onConfirm={handleConfirmDelete}
+        onConfirm={() => requireWrite(handleConfirmDelete)}
         onCancel={() => setPendingDelete(null)}
       />
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </View>
   );
 }

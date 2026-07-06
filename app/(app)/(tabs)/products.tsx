@@ -15,19 +15,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SearchBar } from '@/components/SearchBar';
 import { ProductCard } from '@/components/ProductCard';
 import { EmptyState } from '@/components/EmptyState';
+import { ConnectionErrorScreen } from '@/components/ConnectionErrorScreen';
 import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/hooks/useAuth';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
+import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { importInitialProducts, declineInitialProducts } from '@/services/importInitialProducts';
 import { normalizeText } from '@/utils/text';
 import { theme } from '@/theme';
 import { Button, Chip, IconChip, ScreenHeader } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 
 export default function ProductsScreen() {
   const router = useRouter();
-  const { products, loading } = useProducts();
+  const { products, loading, retry } = useProducts();
+  const loadingTimedOut = useLoadingTimeout(loading);
   const { categories } = useCategories();
   const { business, refreshBusiness } = useAuth();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -101,7 +107,7 @@ export default function ProductsScreen() {
               )}
               <TouchableOpacity
                 style={styles.fab}
-                onPress={() => router.push('/products/new')}
+                onPress={() => requireWrite(() => router.push('/products/new'))}
                 activeOpacity={0.85}
               >
                 <Ionicons name="add" size={24} color="#fff" />
@@ -131,7 +137,9 @@ export default function ProductsScreen() {
           </ScrollView>
         )}
 
-        {loading ? (
+        {loading && loadingTimedOut ? (
+          <ConnectionErrorScreen onRetry={retry} />
+        ) : loading ? (
           <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
         ) : showInitialOffer ? (
           <View style={styles.offerWrap}>
@@ -143,13 +151,13 @@ export default function ProductsScreen() {
             </Text>
             <Button
               label="Cargar lista inicial"
-              onPress={handleImport}
+              onPress={() => requireWrite(handleImport)}
               loading={importing}
               style={styles.offerPrimaryBtn}
             />
             <TouchableOpacity
               style={styles.offerSecondaryBtn}
-              onPress={handleDecline}
+              onPress={() => requireWrite(handleDecline)}
               disabled={importing}
               activeOpacity={0.7}
             >
@@ -162,7 +170,7 @@ export default function ProductsScreen() {
             title="Sin productos todavía"
             subtitle="Agregá tu primer producto para empezar a gestionar tu catálogo."
             actionLabel="Agregar producto"
-            onAction={() => router.push('/products/new')}
+            onAction={() => requireWrite(() => router.push('/products/new'))}
           />
         ) : filtered.length === 0 ? (
           <EmptyState
@@ -186,6 +194,7 @@ export default function ProductsScreen() {
           />
         )}
       </View>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </SafeAreaView>
   );
 }

@@ -1,0 +1,221 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Verificado 2026-07-05 contra el texto real pegado en Firebase Console
+// (antes solo existían ahí, nunca versionadas). DECISIONES_TECNICAS.md
+// documentaba reglas más restrictivas de lo que production realmente tenía
+// (allow read, write sin distinción en cada colección) — production era
+// MÁS permisiva que la documentación. Al reconstruir este archivo con la
+// intención "documentada" en vez de la real, quedaron 3 restricciones de
+// más que hubieran roto funciones reales del código (ver diff completo en
+// docs/SAAS_ROADMAP.md, sección "Comparación contra Firebase Console"):
+// delete de customers, update de movements, update de cashMovements. Ya
+// corregidas acá. Ver esa sección antes de futuros cambios a este archivo.
+// ─────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    function isOwner(businessId) {
+      return request.auth != null && request.auth.uid == businessId;
+    }
+
+    // Acceder a un campo ausente de un mapa (ej. `resource.data.plan` cuando
+    // el doc no tiene `plan`) tira un error de evaluación en Rules, no
+    // `null` — y un error de evaluación se resuelve como acceso denegado.
+    // Por eso hay que chequear presencia con `in` antes de comparar, para
+    // que las cuentas legacy sin `plan` puedan seguir actualizando otros
+    // campos sin ser rechazadas por este chequeo.
+    function planUnchanged() {
+      return (!('plan' in resource.data) && !('plan' in request.resource.data))
+        || (('plan' in resource.data) && ('plan' in request.resource.data)
+            && request.resource.data.plan == resource.data.plan);
+    }
+
+    // Fase 5.1: reemplaza a deletionRequestOk() (antes conflaba "sin
+    // cambios" y "recién creada" en un solo booleano). Separado en dos
+    // piezas para poder exigir, además, que crear `deletionRequest` sea la
+    // ÚNICA cosa que cambia en esa escritura — así nadie puede colar un
+    // cambio de nombre/preferencias/plan en la misma operación que solicita
+    // la eliminación de cuenta. `deletionRequestUntouched()` es la mitad
+    // que exige el camino operativo (ver `businesses/{businessId}` update,
+    // más abajo); `isNewDeletionRequestOnly()` es el camino alternativo,
+    // disponible en CUALQUIER estado de plan (incluso ausente/inválido).
+    //
+    // OJO: la forma nueva se valida con `== {'requestedAt': request.time}`
+    // (comparación de mapa completo) en vez de `.keys().hasOnly([...])`.
+    // Llamar a un método como `.keys()` sobre un campo que puede estar
+    // ausente truena con "Null value error" AUNQUE esté detrás de un `&&`
+    // que en teoría debería evitar que se evalúe — el short-circuit de
+    // Rules no protege llamadas a método de esa manera. `==` contra un
+    // mapa completo sí es seguro y además exige las claves exactas.
+    function deletionRequestUntouched() {
+      return (!('deletionRequest' in resource.data) && !('deletionRequest' in request.resource.data))
+        || (('deletionRequest' in resource.data) && ('deletionRequest' in request.resource.data)
+            && request.resource.data.deletionRequest == resource.data.deletionRequest);
+    }
+
+    function isNewDeletionRequestOnly() {
+      return !('deletionRequest' in resource.data)
+        && ('deletionRequest' in request.resource.data)
+        && request.resource.data.deletionRequest == {'requestedAt': request.time}
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletionRequest']);
+    }
+
+    // Lógica de "plan activo" separada del `get()` que la alimenta — así
+    // `businesses/{businessId}` puede evaluarla sobre `resource.data.plan`
+    // (que ya tiene gratis, es el propio documento) sin pagar una lectura
+    // extra redundante para consultarse a sí mismo. Las 6 subcolecciones
+    // (Fase 5) siguen usando `planIsActive(businessId)`, que sí necesita el
+    // `get()` porque ahí `resource` es un documento distinto (producto,
+    // cliente, etc.), no el negocio.
+    function isPlanActiveValue(plan) {
+      return plan.status == 'active'
+        && (plan.type == 'pro' || (plan.type == 'trial' && request.time < plan.trialEndsAt));
+    }
+
+    function planIsActive(businessId) {
+      return isPlanActiveValue(get(/databases/$(database)/documents/businesses/$(businessId)).data.plan);
+    }
+
+    // Valida la forma de un plan trial recién creado. Tolerancia de ±5min
+    // en trialEndsAt: el cliente no conoce request.time (hora del servidor)
+    // de antemano para poder mandarlo como igualdad exacta, así que se
+    // valida un rango en vez de un valor exacto. trialStartedAt sí puede
+    // validarse exacto porque se manda como sentinel serverTimestamp(),
+    // que Firestore resuelve a request.time antes de evaluar la regla.
+    function isValidNewTrialPlan(plan) {
+      return plan.keys().hasOnly(['type', 'status', 'trialStartedAt', 'trialEndsAt', 'updatedAt'])
+        && plan.type == 'trial'
+        && plan.status == 'active'
+        && plan.trialStartedAt == request.time
+        && plan.trialEndsAt > request.time + duration.value(30, 'd') - duration.value(5, 'm')
+        && plan.trialEndsAt < request.time + duration.value(30, 'd') + duration.value(5, 'm')
+        && plan.updatedAt == request.time;
+    }
+
+    // ── Usuarios ─────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+
+      // Borrar el perfil (sin borrar antes/después el negocio en la misma
+      // operación atómica) es exactamente lo que dejaba cuentas en estado
+      // inconsistente cuando "Eliminar cuenta" fallaba a mitad de camino.
+      // El borrado real de cuentas se resuelve en Fase 6 vía Admin SDK.
+      allow delete: if false;
+    }
+
+    // ── Negocios ─────────────────────────────────────────────────────────
+
+    match /businesses/{businessId} {
+      allow read: if isOwner(businessId);
+
+      // Alta de negocio (registro): el plan inicial DEBE ser un trial de
+      // 30 días con forma exacta. No se permite crear directamente en pro,
+      // ni con status distinto de active, ni con trialEndsAt manipulado.
+      allow create: if isOwner(businessId)
+        && isValidNewTrialPlan(request.resource.data.plan);
+
+      // Fase 5.1: el dueño puede actualizar su negocio por DOS caminos
+      // excluyentes entre sí:
+      //
+      // A) Operativo (nombre, preferencias, importedInitialProducts, etc.):
+      //    exige plan activo (Pro o Trial vigente) Y que `deletionRequest`
+      //    no se toque en esa misma escritura. Un negocio con plan ausente,
+      //    inválido, vencido, readonly o suspended NO entra por acá.
+      //
+      // B) Solicitar eliminación de cuenta: exige que `deletionRequest` sea
+      //    la ÚNICA clave que cambia, con forma válida, y que no existiera
+      //    antes — disponible en CUALQUIER estado de plan, incluso ausente,
+      //    precisamente porque es la vía de salida para una cuenta que ya
+      //    no puede operar. No se puede combinar con ningún otro cambio.
+      //
+      // `plan` en sí sigue sin poder tocarlo el cliente bajo ningún camino
+      // (planUnchanged(), sin cambios) — eso solo lo toca el Admin SDK
+      // (panel admin, Fase 6).
+      allow update: if isOwner(businessId) && planUnchanged() && (
+        (isPlanActiveValue(resource.data.plan) && deletionRequestUntouched())
+        || isNewDeletionRequestOnly()
+      );
+
+      // Borrar el negocio (incluso el propio dueño) queda denegado. Antes
+      // este delete estaba permitido para la función "Eliminar cuenta" —
+      // se removió: dejaba una vía para reiniciar el trial (borrar y
+      // recrear) y, peor, dejaba la cuenta en un estado a medio borrar si
+      // el paso de borrar el usuario de Firebase Auth fallaba después. El
+      // flujo nuevo es "Solicitar eliminación de cuenta" (no destructivo,
+      // ver `isNewDeletionRequestOnly()` arriba); el borrado real se
+      // resuelve en Fase 6 vía Admin SDK/Cloud Function, sin este camino
+      // parcial.
+      allow delete: if false;
+
+      // Productos. Lectura siempre permitida; escritura exige plan activo
+      // (Fase 5) — trial vencido/readonly/suspended ya no pueden escribir
+      // ni siquiera saltándose la app.
+      match /products/{productId} {
+        allow read: if isOwner(businessId);
+        allow create, update, delete: if isOwner(businessId) && planIsActive(businessId);
+      }
+
+      // Categorías. Mismo criterio que productos.
+      match /categories/{categoryId} {
+        allow read: if isOwner(businessId);
+        allow create, update, delete: if isOwner(businessId) && planIsActive(businessId);
+      }
+
+      // Clientes / fiados. `delete` habilitado: lo usa de verdad la pantalla
+      // de eliminar cliente (app/(app)/customers/[id]/edit.tsx) — producción
+      // ya lo permitía (allow read, write sin distinción), la documentación
+      // vieja decía "delete NOT allowed" pero eso nunca reflejó el código real.
+      match /customers/{customerId} {
+        allow read: if isOwner(businessId);
+        allow create, update, delete: if isOwner(businessId) && planIsActive(businessId);
+
+        // `update` habilitado: `annulMovement` (src/services/customers.ts)
+        // marca `annulled: true` en el movimiento original vía
+        // `tx.update(origRef, ...)` al anular un fiado/pago — no son
+        // puramente inmutables como decía la documentación vieja. `delete`
+        // sigue sin permitirse: ninguna función del código lo usa.
+        match /movements/{movementId} {
+          allow read: if isOwner(businessId);
+          allow create, update: if isOwner(businessId) && planIsActive(businessId);
+        }
+      }
+
+      // Caja. `delete` de la sesión sigue sin permitirse — ninguna función
+      // del código la borra (solo se abre/reabre/cierra).
+      match /cashSessions/{sessionId} {
+        allow read: if isOwner(businessId);
+        allow create, update: if isOwner(businessId) && planIsActive(businessId);
+
+        // `update` habilitado: `annulCashMovement` (src/services/cash.ts)
+        // marca `annulled: true` en el movimiento original vía
+        // `tx.update(origRef, ...)` al anular un ingreso/egreso. `delete`
+        // sigue sin permitirse: ninguna función del código lo usa.
+        match /cashMovements/{movementId} {
+          allow read: if isOwner(businessId);
+          allow create, update: if isOwner(businessId) && planIsActive(businessId);
+        }
+      }
+    }
+
+    // Fase 6: historial de acciones del Panel Admin. Solo lo escriben y leen
+    // las Cloud Functions callable (adminChangePlan/adminGetBusinessDetail/
+    // adminListAuditLogs) usando el Admin SDK, que evalúa con privilegios
+    // propios e ignora estas reglas por completo — este bloque existe
+    // únicamente para negar de forma explícita cualquier acceso directo
+    // desde un cliente (incluso el propio administrador autenticado en la
+    // app), sin depender del catch-all de abajo.
+    match /adminAuditLogs/{logId} {
+      allow read, write: if false;
+    }
+
+    // Catch-all: denegar todo lo que no matchea explícitamente
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

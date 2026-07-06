@@ -1,5 +1,11 @@
 # Roadmap
 
+Historial de fases del **producto** (features de la app: caja, fiados,
+productos, PDF, onboarding, rediseño). Para el roadmap del **SaaS**
+(planes, Firestore Rules, Cloud Functions, panel admin) — que usa su propia
+numeración de fases, independiente de la de este documento — ver
+`docs/SAAS_ROADMAP.md`.
+
 ## ✅ Fase 1 — Proyecto base Expo
 - Expo + TypeScript
 - Expo Router
@@ -73,7 +79,7 @@
 - Banner offline automático: detecta pérdida de conexión con expo-network, desaparece al reconectar
 - Exportación de datos en JSON: productos, clientes con sus movimientos, historial completo de cajas — compartible por Drive / WhatsApp / email
 - Recordatorio semanal in-app: alerta si hace más de 7 días sin exportar, con registro local de la última exportación
-- Eliminación de cuenta: doble confirmación → borrado en lotes de todos los documentos Firestore (subcollections primero) → eliminación de cuenta Firebase Auth. Manejo del caso sesión expirada.
+- Eliminación de cuenta: doble confirmación → borrado en lotes de todos los documentos Firestore (subcollections primero) → eliminación de cuenta Firebase Auth. Manejo del caso sesión expirada. **HISTÓRICO / SUPERADO:** este flujo de borrado directo se reemplazó (ver `docs/SAAS_ROADMAP.md`, fase de seguridad previa a Fase 2 del SaaS) por una solicitud no destructiva (`deletionRequest`) procesada manualmente por soporte — la app ya no borra datos ni la cuenta de Auth por sí sola.
 
 ## ✅ Fase 12 — Onboarding inicial
 - Pantalla de bienvenida al registrarse: 4 pasos explicativos (Caja · Fiados · Productos · Lista de precios)
@@ -111,7 +117,13 @@
 - Plantilla del PDF alineada a la paleta de marca en lugar de colores propios desconectados del theme
 
 ## 🔲 Por definir
+
 - Estadísticas y reportes
 - Notificaciones push (recordatorios de deuda)
-- Multi-usuario / empleados
-- Versión Pro
+- Multi-usuario / empleados por negocio
+- Exportación en formato CSV
+
+El modelo de planes (Trial / Pro / solo lectura / suspendido) **ya no está
+pendiente** — está implementado y desplegado. Ver `docs/SAAS_ROADMAP.md`
+para el estado real del SaaS y la lista completa de pendientes de esa parte
+del proyecto (cobro, panel web, etc.), que no se duplica acá.

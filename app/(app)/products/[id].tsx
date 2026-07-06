@@ -14,11 +14,13 @@ import { deleteField } from 'firebase/firestore';
 import type { UpdateData } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { getProduct, updateProduct, deleteProduct } from '@/services/products';
 import { calculatePrice } from '@/utils/pricing';
 import { ROUND_OPTIONS } from '@/constants';
 import { theme } from '@/theme';
 import { AmountDisplay, Button, Card, Chip, ConfirmDialog, TextField } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import type { Product, ProductType, RoundTo } from '@/models';
 
 const TYPE_OPTIONS: { label: string; value: ProductType }[] = [
@@ -32,6 +34,7 @@ export default function EditProductScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const { categories } = useCategories();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [productLoading, setProductLoading] = useState(true);
@@ -307,7 +310,7 @@ export default function EditProductScreen() {
 
         <Button
           label="Guardar cambios"
-          onPress={handleSave}
+          onPress={() => requireWrite(handleSave)}
           loading={saving}
           disabled={deleting}
           style={styles.saveBtn}
@@ -316,7 +319,7 @@ export default function EditProductScreen() {
         <Button
           label="Eliminar producto"
           variant="danger"
-          onPress={() => setConfirmDeleteVisible(true)}
+          onPress={() => requireWrite(() => setConfirmDeleteVisible(true))}
           loading={deleting}
           disabled={saving}
         />
@@ -328,9 +331,10 @@ export default function EditProductScreen() {
         message={`¿Eliminás "${name}"? Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         variant="destructive"
-        onConfirm={handleConfirmDelete}
+        onConfirm={() => requireWrite(handleConfirmDelete)}
         onCancel={() => setConfirmDeleteVisible(false)}
       />
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </KeyboardAvoidingView>
   );
 }

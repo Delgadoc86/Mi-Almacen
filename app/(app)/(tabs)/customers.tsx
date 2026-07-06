@@ -6,13 +6,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SearchBar } from '@/components/SearchBar';
 import { CustomerCard } from '@/components/CustomerCard';
 import { EmptyState } from '@/components/EmptyState';
+import { ConnectionErrorScreen } from '@/components/ConnectionErrorScreen';
 import { useCustomers } from '@/hooks/useCustomers';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
+import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { theme } from '@/theme';
 import { AmountDisplay, ScreenHeader } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 
 export default function CustomersScreen() {
   const router = useRouter();
-  const { customers, loading } = useCustomers();
+  const { customers, loading, retry } = useCustomers();
+  const loadingTimedOut = useLoadingTimeout(loading);
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
   const [search, setSearch] = useState('');
 
   const totalDebt = useMemo(() => customers.reduce((sum, c) => sum + c.balance, 0), [customers]);
@@ -44,7 +50,7 @@ export default function CustomersScreen() {
           right={
             <TouchableOpacity
               style={styles.fab}
-              onPress={() => router.push('/customers/new')}
+              onPress={() => requireWrite(() => router.push('/customers/new'))}
               activeOpacity={0.85}
             >
               <Ionicons name="add" size={24} color="#fff" />
@@ -79,7 +85,9 @@ export default function CustomersScreen() {
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Buscar cliente..." />
 
-        {loading ? (
+        {loading && loadingTimedOut ? (
+          <ConnectionErrorScreen onRetry={retry} />
+        ) : loading ? (
           <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
         ) : customers.length === 0 ? (
           <EmptyState
@@ -87,7 +95,7 @@ export default function CustomersScreen() {
             title="No hay clientes fiados todavía"
             subtitle="Agregá un cliente para empezar a registrar fiados y cobros."
             actionLabel="Agregar cliente"
-            onAction={() => router.push('/customers/new')}
+            onAction={() => requireWrite(() => router.push('/customers/new'))}
           />
         ) : filtered.length === 0 ? (
           <EmptyState
@@ -110,6 +118,7 @@ export default function CustomersScreen() {
           />
         )}
       </View>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </SafeAreaView>
   );
 }

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    Mi Almacén — icono maestro
+    Concepto: "La Libreta" — la libreta de fiado del almacén de barrio,
+    reinterpretada como símbolo de orden, control y confianza.
+    Estructura en grupos para que scripts/generate-icons.html pueda
+    activar/desactivar capas y recolorear el glifo (#glyph) a blanco
+    para la variante monocromática de Android 13+.
+  -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14568F"/>
+      <stop offset="55%" stop-color="#0F4C81"/>
+      <stop offset="100%" stop-color="#0A3560"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo: capa independiente (android-icon-background.png la usa sola) -->
+  <rect id="bg" x="0" y="0" width="1024" height="1024" fill="url(#bgGradient)"/>
+
+  <!-- Glifo: capa independiente (android-icon-foreground.png / monochrome la usan sola) -->
+  <g id="glyph">
+    <path id="book-fold" d="M628,812 L742,698 L742,812 Z" fill="#E4DAC5"/>
+    <rect id="book-cover" x="282" y="212" width="460" height="600" rx="44" ry="44" fill="#F7F1E6"/>
+    <rect id="book-spine" x="333" y="236" width="10" height="552" rx="5" fill="#E3D9C2"/>
+    <path id="book-ribbon" d="M560,212 L644,212 L644,520 L602,468 L560,520 Z" fill="#C2542D"/>
+  </g>
+</svg>

@@ -34,6 +34,21 @@ yarn-error.*
 .env
 .env*.local
 
+# Firebase Admin SDK service account key — nunca se commitea. El script de
+# migración usa Application Default Credentials (variable de entorno
+# GOOGLE_APPLICATION_CREDENTIALS apuntando FUERA del repo), así que no
+# debería aparecer ningún archivo de este tipo acá — estos patrones son
+# protección adicional por si alguno se cae adentro por error.
+**/*serviceAccount*.json
+**/*service-account*.json
+**/*firebase-admin*.json
+
+# Firebase emulator local state
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
 # typescript
 *.tsbuildinfo
 

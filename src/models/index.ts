@@ -95,7 +95,18 @@ export type CashMovement = {
 
 // ─────────────────────────────────────────────────────────
 
-export type Plan = 'free' | 'pro';
+export type PlanType = 'trial' | 'pro';
+export type PlanStatus = 'active' | 'readonly' | 'suspended';
+
+export type BusinessPlan = {
+  type: PlanType;
+  status: PlanStatus;
+  trialStartedAt: Timestamp;
+  trialEndsAt: Timestamp;
+  proActivatedAt?: Timestamp;
+  proExpiresAt?: Timestamp;
+  updatedAt: Timestamp;
+};
 
 export type OnboardingState = {
   completed: boolean;
@@ -114,6 +125,72 @@ export type UserProfile = {
   onboarding?: OnboardingState;
 };
 
+// ── Panel Admin (Fase 6) ─────────────────────────────────────────────────
+// Formas devueltas por las Cloud Functions callable en functions/index.js.
+// No son documentos de Firestore leídos directamente por el cliente — el
+// cliente nunca lee `businesses`/`adminAuditLogs` de otro negocio por su
+// cuenta, solo a través de estas funciones. Fechas ya vienen serializadas
+// como ISO string (no Timestamp) porque cruzan el protocolo callable.
+export type AdminPlanKind = 'no-plan' | 'suspended' | 'readonly' | 'pro' | 'trial-active' | 'trial-expired';
+
+export type AdminChangePlanAction = 'activate_pro' | 'extend_trial' | 'set_readonly' | 'suspend' | 'reactivate';
+
+export type AdminDashboardCounts = {
+  trialActive: number;
+  trialExpired: number;
+  pro: number;
+  readonly: number;
+  suspended: number;
+  noPlan: number;
+  pendingDeletionRequests: number;
+  totalBusinesses: number;
+};
+
+export type AdminBusinessListItem = {
+  businessId: string;
+  name: string;
+  email: string;
+  kind: AdminPlanKind;
+  planType: PlanType | null;
+  planStatus: PlanStatus | null;
+  trialEndsAt: string | null;
+  createdAt: string | null;
+  hasDeletionRequest: boolean;
+};
+
+export type AdminSerializedPlan = {
+  type: PlanType | null;
+  status: PlanStatus | null;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  proActivatedAt: string | null;
+  proExpiresAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminAuditLogEntry = {
+  id: string;
+  actorUid: string;
+  businessId: string;
+  action: AdminChangePlanAction;
+  reason: string | null;
+  previousPlan: AdminSerializedPlan | null;
+  nextPlan: AdminSerializedPlan | null;
+  createdAt: string | null;
+};
+
+export type AdminBusinessDetail = {
+  businessId: string;
+  name: string;
+  ownerEmail: string;
+  ownerDisplayName: string;
+  createdAt: string | null;
+  kind: AdminPlanKind;
+  plan: AdminSerializedPlan | null;
+  deletionRequestedAt: string | null;
+  auditLog: AdminAuditLogEntry[];
+};
+
 export type Business = {
   id: string;
   ownerUid: string;
@@ -121,7 +198,14 @@ export type Business = {
   defaultMargin?: number;
   defaultRoundTo?: RoundTo;
   defaultCategoryId?: string;
-  plan?: Plan;
+  // Opcional durante la transición: cuentas creadas antes de Fase 1 pueden
+  // no tener `plan` todavía hasta que corra el script de migración
+  // (scripts/migrate-existing-plans.mjs). Nunca lo escribe el cliente
+  // salvo en la creación inicial del negocio — ver firestore.rules.
+  plan?: BusinessPlan;
+  // Solicitud no destructiva de "Eliminar cuenta" (ver src/services/deleteAccount.ts).
+  // Inmutable para el cliente una vez creada — ver firestore.rules.
+  deletionRequest?: { requestedAt: Timestamp };
   importedInitialProducts?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;

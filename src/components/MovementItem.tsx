@@ -15,6 +15,10 @@ const PAYMENT_LABELS: Record<string, string> = {
 type Props = {
   movement: Movement;
   onAnnul?: () => void;
+  // Fase 4: gatea la apertura del diálogo de anulación. Se pasa desde la
+  // pantalla que renderiza la lista (un solo useWriteGuard() por pantalla,
+  // no uno por ítem) — si se omite, el ítem no bloquea nada por su cuenta.
+  requireWrite?: (action: () => void) => void;
 };
 
 function formatDate(ts: Movement['createdAt']): string {
@@ -27,7 +31,7 @@ function formatDate(ts: Movement['createdAt']): string {
   );
 }
 
-export function MovementItem({ movement, onAnnul }: Props) {
+export function MovementItem({ movement, onAnnul, requireWrite }: Props) {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const isReversal = movement.type === 'reversal';
   const isFiado = movement.type === 'fiado';
@@ -56,7 +60,8 @@ export function MovementItem({ movement, onAnnul }: Props) {
 
   function handleConfirmAnnul() {
     setConfirmVisible(false);
-    onAnnul?.();
+    const annul = () => onAnnul?.();
+    requireWrite ? requireWrite(annul) : annul();
   }
 
   return (
@@ -87,7 +92,10 @@ export function MovementItem({ movement, onAnnul }: Props) {
         {canAnnul && (
           <TouchableOpacity
             style={styles.menuBtn}
-            onPress={() => setConfirmVisible(true)}
+            onPress={() => {
+              const open = () => setConfirmVisible(true);
+              requireWrite ? requireWrite(open) : open();
+            }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="ellipsis-vertical" size={16} color={theme.colors.muted} />

@@ -6,7 +6,12 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    // Los tests unitarios (src/**/*.test.ts) corren con Node directo
+    // (--experimental-strip-types, ver package.json "test:unit"), que exige
+    // extensión .ts explícita en imports relativos — Metro/expo-router
+    // nunca ven estos archivos, así que esto no afecta el bundle de la app.
+    "allowImportingTsExtensions": true
   },
   "include": [
     "**/*.ts",

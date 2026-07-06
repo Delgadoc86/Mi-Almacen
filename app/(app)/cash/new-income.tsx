@@ -10,9 +10,11 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useCashSession } from '@/hooks/useCashSession';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { addCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
 import { Button, Chip, InlineMessage, TextField } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import type { PaymentMethod } from '@/models';
 import type { IconName } from '@/components/ui';
 
@@ -27,6 +29,7 @@ export default function NewIncomeScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const { session } = useCashSession();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [amount, setAmount] = useState('');
   const [medioPago, setMedioPago] = useState<PaymentMethod>('efectivo');
@@ -80,7 +83,7 @@ export default function NewIncomeScreen() {
             placeholderTextColor={theme.colors.muted}
             autoFocus
             returnKeyType="done"
-            onSubmitEditing={handleSave}
+            onSubmitEditing={() => requireWrite(handleSave)}
           />
         </View>
 
@@ -105,14 +108,15 @@ export default function NewIncomeScreen() {
           placeholder="Ej: venta del día, cobro mercadería..."
           autoCapitalize="sentences"
           returnKeyType="done"
-          onSubmitEditing={handleSave}
+          onSubmitEditing={() => requireWrite(handleSave)}
           containerStyle={styles.field}
         />
 
         {error ? <InlineMessage variant="error" text={error} style={styles.field} /> : null}
 
-        <Button label="GUARDAR INGRESO" onPress={handleSave} loading={saving} disabled={!canSave} />
+        <Button label="GUARDAR INGRESO" onPress={() => requireWrite(handleSave)} loading={saving} disabled={!canSave} />
       </ScrollView>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </KeyboardAvoidingView>
   );
 }

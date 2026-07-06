@@ -82,6 +82,8 @@
 - `business.name` viene del formulario de registro; no hay pantalla de edición todavía.
 - Sin validación de email (Firebase envía correo de verificación si se configura, pero no está activado).
 
+> **Por qué `users` y `businesses` son entidades separadas (y no un solo documento):** aunque hoy la relación es 1:1 (`businessId === uid`), separarlas desde el principio evita una migración de esquema el día que exista más de una persona por negocio (empleados, socios) o un cambio de dueño. `users/{uid}` representa a la *persona* (identidad, perfil, último acceso); `businesses/{businessId}` representa al *comercio* (datos comerciales, preferencias, plan). El plan de suscripción (ver sección "SaaS" más abajo) vive en `businesses`, no en `users`, precisamente porque lo que se paga es el negocio, no la persona que hoy lo opera — así, cuando exista multi-usuario, agregar un segundo empleado a un negocio no implica tocar en absoluto el modelo de planes.
+
 ---
 
 ## Anti-duplicados en Firestore
@@ -1041,4 +1043,133 @@ La escala automática de `pdfTemplate.ts` (`getSv()`, 3 niveles según cantidad 
 ### PDF con paleta de marca
 
 La plantilla HTML/CSS del PDF tenía su propia paleta hardcodeada (`#1D4ED8`, `#111827`, `#6B7280`…), desconectada del `theme` de la app — encontrado en la auditoría del rediseño de Fase 15 pero dejado fuera de esa fase a propósito por ser HTML de impresión, no componentes de React Native. Se resolvió importando `theme` directamente en `pdfTemplate.ts` y referenciando `theme.colors.*` en el CSS generado, en vez de duplicar hex codes. Se mantuvo la tipografía del sistema (Arial/Helvetica) en lugar de Manrope: incrustar una fuente custom en HTML impreso vía `expo-print` requeriría empaquetarla como base64 dentro del documento, un riesgo de compatibilidad innecesario para un archivo que se comparte por WhatsApp o se imprime desde impresoras caseras.
+
+---
+
+## SaaS — Planes, Rules, sincronización, panel admin y Cloud Functions
+
+Estas decisiones corresponden a la conversión de Mi Almacén en SaaS,
+implementada en las fases propias documentadas en `docs/SAAS_ROADMAP.md`
+(que usa su propia numeración de fases, independiente de la de este
+documento — ver la nota al inicio de `ROADMAP.md`). Acá se resume el
+**por qué** de cada decisión; el detalle de implementación, archivos
+tocados y resultados de tests está en `docs/SAAS_ROADMAP.md`.
+
+### Por qué el plan pertenece al negocio y no al usuario
+
+`businesses/{businessId}.plan` (no `users/{uid}.plan`). Lo que se vende es
+el acceso al negocio, no a la persona — coherente con la separación
+`users`/`businesses` de Fase 2 (ver más arriba). El día que exista
+multi-usuario por negocio, todos los miembros de un mismo negocio comparten
+el mismo plan sin ningún cambio de modelo.
+
+### Por qué no existe un plan "Demo" ni un plan "master"
+
+Se evaluaron y se descartaron dos ideas: un plan `demo` con funcionalidad
+reducida (se decidió que el trial completo de 30 días ya cumple ese rol,
+sin mantener dos variantes de "acceso limitado") y un plan `master` para la
+cuenta administradora (se decidió separarlo del todo: `admin` es un custom
+claim de Firebase Auth, no un valor de `plan.type` — ver más abajo). Los
+únicos valores de `type` son `trial` y `pro`; los únicos valores de
+`status` son `active`, `readonly` y `suspended`.
+
+### Por qué el enforcement real vive en Firestore Rules, no solo en la UI
+
+`getPlanStatus()` (puro) → `usePlanStatus()` (lo consume desde
+`AuthContext`) → `useWriteGuard()` (bloquea el `onPress` de cada acción de
+escritura en la UI) dan una buena experiencia — un mensaje claro en vez de
+un error técnico — pero **la UI nunca es la capa de seguridad real**. Un
+negocio con trial vencido, en solo lectura o suspendido no puede escribir
+aunque se salte la UI (Firestore directo, DevTools, un cliente
+alternativo), porque `firestore.rules` evalúa el mismo estado del lado del
+servidor en cada `create`/`update`/`delete`. Se probó explícitamente que la
+UI y las Rules coinciden, nunca asumiendo que alcanza con una sola de las
+dos capas.
+
+### Por qué `deletionRequest` es la única excepción a "sin plan activo no se escribe"
+
+Bloquear todo escritura para una cuenta vencida/suspendida no puede incluir
+bloquear la posibilidad de pedir el borrado de la cuenta — sería atrapar al
+usuario. `deletionRequest` es la única excepción explícita en las Rules:
+puede crearse sin importar el estado del plan, pero no puede combinarse con
+ningún otro cambio en la misma escritura (así nadie cuela un cambio de
+nombre/preferencias aprovechando esa vía) ni modificarse o borrarse una vez
+creada.
+
+### Por qué la sincronización del plan es en tiempo real (un solo listener)
+
+`AuthContext` mantiene una única suscripción `onSnapshot` a
+`businesses/{uid}` — no una por pantalla. Si el estado del plan cambia desde
+el panel admin, la app abierta lo refleja sin que el usuario tenga que
+cerrar sesión o reiniciar. El estado de sincronización
+(`loading`/`synced`/`stale`/`error`/`missing`) es explícito: mientras no se
+puede confirmar el estado real del plan (sin conexión, error del listener),
+se bloquean escrituras nuevas por precaución, pero los datos ya visibles en
+pantalla no se ocultan ni se pierden — nunca se inventa un permiso cuando
+hay duda.
+
+### Por qué `admin` es un custom claim y no un plan
+
+`Pro` habilita el uso normal de Mi Almacén; `admin: true` habilita
+exclusivamente el panel de administración interno. Son conceptos
+independientes a propósito: un custom claim de Firebase Auth vive en el ID
+token, no en Firestore, y solo se puede asignar con el Admin SDK
+(`scripts/bootstrap-admin.mjs`) — ningún cliente tiene forma de otorgárselo
+a sí mismo, ni siquiera manipulando su propio documento de negocio. La ruta
+del panel admin valida el claim en el propio layout (no solo oculta el
+botón), así que entrar por navegación directa sin el claim no llega a pedir
+ni mostrar ningún dato administrativo.
+
+### Por qué el panel admin es móvil interno y no un panel web
+
+Se evaluó un panel web separado (React + Vite) y se descartó por ahora: un
+panel dentro de la misma APK, protegido por el custom claim, cubre la
+necesidad actual (una sola cuenta administradora) sin sumar un proyecto,
+hosting ni pipeline de build adicional. El backend (Cloud Functions
+callable) es agnóstico del cliente que lo llama — el día que exista un
+panel web, va a consumir las mismas Functions sin cambios.
+
+### Por qué las acciones de plan son Cloud Functions y no escrituras directas a Firestore
+
+El cliente nunca escribe el `plan` de otro negocio directamente — ni
+siquiera la cuenta administradora. Las 5 Cloud Functions callable
+(`adminGetDashboard`, `adminListBusinesses`, `adminGetBusinessDetail`,
+`adminChangePlan`, `adminListAuditLogs`) validan `admin: true` del lado del
+servidor antes de cualquier lectura o escritura, y `adminChangePlan` corre
+dentro de una transacción que escribe el nuevo plan **y** el registro de
+auditoría (`adminAuditLogs`) de forma atómica — no hay forma de que uno
+ocurra sin el otro. Esto también deja una sola vía auditable para cambiar
+un plan, en vez de depender de que alguien recuerde anotar por qué se hizo
+un cambio manual en la consola.
+
+### Por qué `adminAuditLogs` es inaccesible para cualquier cliente
+
+El historial de acciones administrativas solo lo escriben y leen las Cloud
+Functions (Admin SDK, que ignora las Rules). `firestore.rules` niega
+explícitamente cualquier lectura o escritura directa a esa colección desde
+un cliente — incluida la propia cuenta administradora autenticada en la
+app — para que la única forma de leer el historial sea a través de
+`adminGetBusinessDetail`/`adminListAuditLogs`, nunca de una consulta
+arbitraria.
+
+### Por qué la eliminación de cuenta no es automática
+
+El flujo anterior (borrado en lotes de Firestore + borrado de la cuenta de
+Firebase Auth, ver `ROADMAP.md` Fase 11) se reemplazó por una solicitud no
+destructiva: el usuario crea `deletionRequest` y el procesamiento real
+sigue siendo manual, a cargo de soporte. Un borrado automático que falla a
+mitad de camino (Firestore borrado, Auth no, o viceversa) deja una cuenta
+en un estado inconsistente sin forma limpia de recuperarla; una solicitud
+registrada y revisada a mano es más lenta pero no tiene ese riesgo. No
+existe todavía un procesamiento automatizado (Cloud Function programada)
+para resolver estas solicitudes — es un pendiente real, no una decisión
+final.
+
+### Identidad visual y branding
+
+La decisión de adoptar una identidad propia ("La Libreta", paleta Azul
+Puerto + Terracota Almacén) en lugar de los íconos placeholder por defecto
+de Expo se documenta en `docs/BRANDING_E_ICONOS.md`, junto con el archivo
+SVG maestro y el procedimiento para regenerar los assets derivados. No se
+duplica ese contenido acá.
 

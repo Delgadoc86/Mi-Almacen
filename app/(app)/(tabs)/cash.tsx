@@ -17,10 +17,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCashSession } from '@/hooks/useCashSession';
 import { useCashMovements } from '@/hooks/useCashMovements';
 import { useAuth } from '@/hooks/useAuth';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
+import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { openCashSession, reopenCashSession } from '@/services/cash';
 import { theme } from '@/theme';
 import { AmountDisplay, Button, ConfirmDialog, IconChip, InlineMessage } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
+import { ConnectionErrorScreen } from '@/components/ConnectionErrorScreen';
 import type { CashSession, CashMovement } from '@/models';
+
+type RequireWrite = (action: () => void) => void;
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -148,7 +154,7 @@ function AmountInput({
 
 // ── OpenCashView — primera vez, sin sesiones ─────────────
 
-function OpenCashView() {
+function OpenCashView({ requireWrite }: { requireWrite: RequireWrite }) {
   const { userProfile } = useAuth();
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -187,7 +193,7 @@ function OpenCashView() {
         <AmountInput
           value={amount}
           onChange={(t) => { setAmount(t); setError(''); }}
-          onSubmit={handleOpen}
+          onSubmit={() => requireWrite(handleOpen)}
           inputRef={inputRef}
         />
 
@@ -196,7 +202,7 @@ function OpenCashView() {
         <Button
           label="ABRIR CAJA"
           icon="lock-open-outline"
-          onPress={handleOpen}
+          onPress={() => requireWrite(handleOpen)}
           loading={saving}
           style={styles.stretchBtn}
         />
@@ -207,7 +213,7 @@ function OpenCashView() {
 
 // ── ClosedCashView — caja cerrada, acción primero ────────
 
-function ClosedCashView({ session }: { session: CashSession }) {
+function ClosedCashView({ session, requireWrite }: { session: CashSession; requireWrite: RequireWrite }) {
   const router = useRouter();
   const { userProfile } = useAuth();
   const [showDetail, setShowDetail] = useState(false);
@@ -335,7 +341,7 @@ function ClosedCashView({ session }: { session: CashSession }) {
             <AmountInput
               value={newAmount}
               onChange={(t) => { setNewAmount(t); setError(''); }}
-              onSubmit={handleOpenNew}
+              onSubmit={() => requireWrite(handleOpenNew)}
               inputRef={newInputRef}
             />
 
@@ -351,7 +357,7 @@ function ClosedCashView({ session }: { session: CashSession }) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.newCajaConfirmBtn, saving && styles.btnDisabled]}
-                onPress={handleOpenNew}
+                onPress={() => requireWrite(handleOpenNew)}
                 disabled={saving}
                 activeOpacity={0.85}
               >
@@ -372,14 +378,14 @@ function ClosedCashView({ session }: { session: CashSession }) {
         <Button
           label="ABRIR NUEVA CAJA"
           icon="lock-open-outline"
-          onPress={handleShowNewForm}
+          onPress={() => requireWrite(handleShowNewForm)}
           style={styles.stretchBtnSm}
         />
       )}
 
       <TouchableOpacity
         style={[styles.secondaryBtn, reopening && styles.btnDisabled]}
-        onPress={() => setConfirmReopenVisible(true)}
+        onPress={() => requireWrite(() => setConfirmReopenVisible(true))}
         disabled={reopening}
         activeOpacity={0.8}
       >
@@ -407,7 +413,7 @@ function ClosedCashView({ session }: { session: CashSession }) {
         title="Reabrir caja"
         message="La caja anterior volverá a quedar activa con todos sus movimientos."
         confirmLabel="Reabrir"
-        onConfirm={handleConfirmReopen}
+        onConfirm={() => requireWrite(handleConfirmReopen)}
         onCancel={() => setConfirmReopenVisible(false)}
       />
     </ScrollView>
@@ -438,7 +444,7 @@ function DetailRow({
 
 // ── ActiveCashView ───────────────────────────────────────
 
-function ActiveCashView({ session }: { session: CashSession }) {
+function ActiveCashView({ session, requireWrite }: { session: CashSession; requireWrite: RequireWrite }) {
   const router = useRouter();
   const { movements, loading: movLoading } = useCashMovements(session.id, 5);
   const saldo = getSaldoActual(session);
@@ -448,10 +454,12 @@ function ActiveCashView({ session }: { session: CashSession }) {
   const showLongAlert = hoursOpen > 36;
 
   function handleClose() {
-    Alert.alert('Cerrar caja', '¿Querés ver el resumen y confirmar el cierre?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Ver resumen', onPress: () => router.push('/cash/close') },
-    ]);
+    requireWrite(() => {
+      Alert.alert('Cerrar caja', '¿Querés ver el resumen y confirmar el cierre?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Ver resumen', onPress: () => router.push('/cash/close') },
+      ]);
+    });
   }
 
   return (
@@ -503,7 +511,7 @@ function ActiveCashView({ session }: { session: CashSession }) {
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={[styles.actionBtn, styles.ingresoBtn]}
-          onPress={() => router.push('/cash/new-income')}
+          onPress={() => requireWrite(() => router.push('/cash/new-income'))}
           activeOpacity={0.85}
         >
           <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
@@ -511,7 +519,7 @@ function ActiveCashView({ session }: { session: CashSession }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, styles.egresoBtn]}
-          onPress={() => router.push('/cash/new-expense')}
+          onPress={() => requireWrite(() => router.push('/cash/new-expense'))}
           activeOpacity={0.85}
         >
           <Ionicons name="remove-circle-outline" size={26} color={theme.colors.error} />
@@ -565,23 +573,28 @@ function ActiveCashView({ session }: { session: CashSession }) {
 // ── Pantalla principal ───────────────────────────────────
 
 export default function CashScreen() {
-  const { session, loading } = useCashSession();
+  const { session, loading, retry } = useCashSession();
+  const loadingTimedOut = useLoadingTimeout(loading);
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.root}>
         <Text style={styles.screenTitle}>Caja</Text>
 
-        {loading ? (
+        {loading && loadingTimedOut ? (
+          <ConnectionErrorScreen onRetry={retry} />
+        ) : loading ? (
           <ActivityIndicator style={{ flex: 1 }} color={theme.colors.primary} size="large" />
         ) : !session ? (
-          <OpenCashView />
+          <OpenCashView requireWrite={requireWrite} />
         ) : session.status === 'closed' ? (
-          <ClosedCashView session={session} />
+          <ClosedCashView session={session} requireWrite={requireWrite} />
         ) : (
-          <ActiveCashView session={session} />
+          <ActiveCashView session={session} requireWrite={requireWrite} />
         )}
       </View>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </SafeAreaView>
   );
 }

@@ -14,8 +14,9 @@ Aplicación de gestión para almacenes, kioscos y despensas.
 5. [Fiados](#fiados)
 6. [Lista de precios (PDF)](#lista-de-precios-pdf)
 7. [Configuración](#configuración)
-8. [Preguntas frecuentes](#preguntas-frecuentes)
-9. [Contacto y soporte](#contacto-y-soporte)
+8. [Tu plan: prueba gratuita y Pro](#tu-plan-prueba-gratuita-y-pro)
+9. [Preguntas frecuentes](#preguntas-frecuentes)
+10. [Contacto y soporte](#contacto-y-soporte)
 
 ---
 
@@ -199,7 +200,7 @@ El PDF incluye los productos ordenados por categoría, con nombre, costo y preci
 
 ## Configuración
 
-La pestaña **Config** tiene cuatro secciones:
+La pestaña **Config** tiene estas secciones:
 
 ### Mi comercio
 
@@ -228,9 +229,45 @@ Tocar **Administrar categorías** para ver y gestionar las categorías:
 
 > Si intenta eliminar una categoría con productos, la aplicación le avisará cuántos productos tiene esa categoría y le pedirá que los reasigne primero.
 
+### Ayuda
+
+- **Ver guía inicial** — vuelve a mostrar la guía de primeros pasos.
+- **Contactar soporte** — abre nuestro sitio web para consultas, activar el plan Pro o reportar un problema. Es la forma más rápida de comunicarse con nosotros directamente desde la app.
+
+### Mis datos
+
+- **Exportar mis datos (JSON)** — genera un archivo con todos sus productos, clientes, fiados e historial de caja, listo para guardar en Google Drive, WhatsApp o email como respaldo. Si pasaron 7 días o más desde la última exportación, aparece un aviso recordatorio arriba de esta sección.
+
 ### Cuenta
 
 - **Cerrar sesión** — cierra la sesión actual. Los datos quedan guardados en la nube.
+- **Solicitar eliminación de cuenta** — al final de Configuración, en la sección "Zona peligrosa". Envía un aviso a soporte pidiendo el borrado de la cuenta. **No borra nada al instante**: su cuenta sigue activa y puede seguir usándola con normalidad mientras el equipo de soporte procesa la solicitud manualmente. Una vez enviada, la pantalla muestra la fecha en que se solicitó y no se puede volver a solicitar (ya quedó registrada).
+
+---
+
+## Tu plan: prueba gratuita y Pro
+
+Cada negocio tiene un plan que determina si puede seguir registrando datos
+nuevos.
+
+- **Prueba gratuita (30 días)** — al crear la cuenta, tiene 30 días de acceso completo sin ningún costo. En la pantalla de Inicio y en Configuración aparece un aviso con los días restantes.
+- **Pro** — acceso completo, sin límite de tiempo.
+- **Solo lectura** — puede ver todos sus datos (productos, clientes, historial de caja) y generar el PDF de precios, pero no puede crear, editar, borrar ni registrar ningún movimiento nuevo. Esto ocurre cuando termina la prueba gratuita sin activar Pro, o si la cuenta queda en este estado por soporte.
+- **Suspendida** — puede consultar sus datos, pero no puede operar. Hay que contactar a soporte para resolverlo.
+
+Cuando una acción está bloqueada por el estado del plan, la aplicación
+muestra un mensaje claro explicando por qué (nunca un error técnico) y qué
+hacer — generalmente, contactar a soporte para activar Pro o resolver la
+situación de la cuenta. Ese mensaje (en el aviso de Inicio/Configuración o
+en el cuadro que aparece al intentar registrar algo) incluye un botón
+("Activar Pro" o "Contactar soporte", según el caso) que abre directamente
+nuestro sitio web — no hace falta buscar el contacto por otro lado. Durante
+la prueba gratuita, también puede activar Pro en cualquier momento desde
+Configuración, tocando el aviso de días restantes.
+
+**¿Se pierden los datos si la cuenta queda en solo lectura o suspendida?**
+No. Todos los datos permanecen intactos y visibles; lo único que cambia es
+la posibilidad de crear o modificar información nueva.
 
 ---
 
@@ -260,6 +297,12 @@ No hay límite establecido en la aplicación.
 **¿El PDF incluye los precios de costo?**
 Sí, el PDF incluye costo y precio de venta para que el propietario tenga referencia al momento de imprimir o compartir.
 
+**¿Cómo activo el plan Pro?**
+Tocando el botón "Activar Pro" que aparece en el aviso de Inicio/Configuración (disponible durante toda la prueba gratuita, no solo cuando está por vencer) o en Configuración → Ayuda → "Contactar soporte". Cualquiera de los dos abre nuestro sitio web; la activación la realiza el equipo de Mi Almacén.
+
+**¿Qué pasa si solicito eliminar mi cuenta y me arrepiento?**
+Mientras la solicitud no fue procesada por soporte, la cuenta sigue activa y utilizable con normalidad. Contacte a soporte para cancelar la solicitud.
+
 ---
 
 ## Contacto y soporte
@@ -269,7 +312,7 @@ Para consultas, soporte técnico o sugerencias:
 **Cristian Delgado**
 Desarrollador
 Maipú, Mendoza, Argentina
-delgadocdev@hotmail.com
+www.delgadodev.com.ar
 
 ---
 

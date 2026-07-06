@@ -10,6 +10,7 @@ export function useCashSession() {
   const [session, setSession] = useState<CashSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!userProfile?.businessId) return;
@@ -26,7 +27,11 @@ export function useCashSession() {
       },
     );
     return unsub;
-  }, [userProfile?.businessId]);
+    // retryKey solo fuerza la resuscripción manual — no es un dato real.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.businessId, retryKey]);
 
-  return { session, loading, error };
+  const retry = () => setRetryKey((k) => k + 1);
+
+  return { session, loading, error, retry };
 }

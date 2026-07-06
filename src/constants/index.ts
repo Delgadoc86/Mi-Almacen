@@ -32,6 +32,10 @@ export const DEFAULT_CATEGORY_IDS: Set<string> = new Set(DEFAULT_CATEGORIES.map(
 
 export const DEFAULT_MARGIN_MAX = 500;
 
+export const TRIAL_DURATION_DAYS = 30;
+
+export const SUPPORT_URL = 'https://www.delgadodev.com.ar';
+
 export const ROUND_OPTIONS: { label: string; value: RoundTo }[] = [
   
   { label: '$10', value: 10 },

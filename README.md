@@ -19,8 +19,8 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 - **Onboarding inicial** — al registrarse, el usuario ve una guía de 4 pasos (abrir caja, crear cliente fiado, agregar producto, controlar lista de precios). Se muestra una sola vez. Desde Configuración se puede volver a ver sin que aparezca automáticamente.
 - **Offline** — banner de sin conexión automático. Firebase encola escrituras simples durante caídas momentáneas y sincroniza al reconectar. Transacciones financieras fallan conscientemente sin red.
 - **Exportar datos** — genera un JSON completo (productos, clientes, movimientos de fiados, historial de cajas) compartible por Drive, WhatsApp o email. Recordatorio semanal in-app si hace más de 7 días sin exportar.
-- **Eliminar cuenta** — borra todos los documentos de Firestore en lotes y elimina la cuenta de Firebase Auth. Doble confirmación y manejo de sesión expirada.
-- **Identidad visual propia** — paleta de marca (Azul Puerto + Terracota Almacén), tipografía Manrope, sistema de componentes reutilizables (`src/components/ui/`) y diálogos de confirmación propios en reemplazo de las alertas nativas del sistema operativo. Pensada para usuarios de 40-70 años: textos grandes, alto contraste, zonas táctiles amplias.
+- **Solicitud de eliminación de cuenta** — el usuario solicita el borrado desde Configuración; la solicitud queda registrada de forma no destructiva (`deletionRequest`, inmutable) y la cuenta sigue funcionando con normalidad hasta que el equipo de soporte confirme el borrado manualmente. La app no borra datos ni la cuenta de Firebase Auth por sí sola.
+- **Identidad visual propia** — paleta de marca (Azul Puerto + Terracota Almacén), tipografía Manrope, sistema de componentes reutilizables (`src/components/ui/`) y diálogos de confirmación propios en reemplazo de las alertas nativas del sistema operativo. Pensada para usuarios de 40-70 años: textos grandes, alto contraste, zonas táctiles amplias. Ver `docs/BRANDING_E_ICONOS.md` para el ícono y los assets derivados.
 
 ---
 
@@ -39,6 +39,7 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 | UI | React Native StyleSheet + sistema de componentes propio (`src/components/ui/`), sin librerías de UI externas |
 | Tipografía | Manrope (`@expo-google-fonts/manrope` + `expo-font`) |
 | Build | EAS Build (expo-constants) |
+| Backend admin | Cloud Functions callable (`functions/`, Node + Admin SDK) — panel admin interno, ver "Estado actual (SaaS)" |
 
 ---
 
@@ -93,51 +94,32 @@ Escanear el código QR con Expo Go desde el dispositivo móvil.
 
 ---
 
-## Reglas de Firestore recomendadas
+## Estado actual (SaaS)
 
-```js
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+Mi Almacén ya no es solo la app operativa — cada negocio tiene un plan que
+determina qué puede hacer:
 
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
+| Plan | Puede operar (crear/editar/borrar/registrar) |
+|---|---|
+| **Trial** (30 días desde el alta) | Sí, mientras esté vigente |
+| **Pro** | Sí, sin vencimiento (mientras no tenga `proExpiresAt`) |
+| **Solo lectura** | No — puede ver todos sus datos, no puede escribir |
+| **Suspendido** | No — puede consultar, debe contactar soporte |
 
-    match /businesses/{businessId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == businessId;
+El plan pertenece al **negocio** (`businesses/{businessId}.plan`), no al
+usuario. El enforcement real ocurre en Firestore Rules (no solo en la UI) —
+ver `firestore.rules`, que es la única fuente de verdad del archivo de
+reglas (no se copia su contenido en ningún documento).
 
-      match /products/{productId} {
-        allow read, create, update, delete: if request.auth != null && request.auth.uid == businessId;
-      }
+Existe además un **panel de administración interno**, dentro de la misma
+APK, visible solo para la cuenta con el custom claim `admin: true`
+(concepto totalmente separado del plan Pro). Permite activar Pro, extender
+trial, pasar a solo lectura, suspender o reactivar cualquier negocio, con
+motivo obligatorio y auditoría de cada acción. El backend son 5 Cloud
+Functions callable, ya desplegadas.
 
-      match /categories/{categoryId} {
-        allow read, create, update, delete: if request.auth != null && request.auth.uid == businessId;
-      }
-
-      match /customers/{customerId} {
-        allow read, create, update: if request.auth != null && request.auth.uid == businessId;
-
-        match /movements/{movementId} {
-          allow read, create: if request.auth != null && request.auth.uid == businessId;
-        }
-      }
-
-      match /cashSessions/{sessionId} {
-        allow read, create, update: if request.auth != null && request.auth.uid == businessId;
-
-        match /cashMovements/{movementId} {
-          allow read, create: if request.auth != null && request.auth.uid == businessId;
-        }
-      }
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-```
+Detalle completo de arquitectura, decisiones y qué falta: `docs/SAAS_ROADMAP.md`.
+Guía de operación/deploy: `docs/OPERACION_ADMIN_Y_DESPLIEGUE.md`.
 
 ---
 
@@ -152,22 +134,30 @@ MiNegocio/
 │   │   ├── cash/            # Caja: ingreso, gasto, cierre, movimientos, historial
 │   │   ├── products/        # Alta, edición y Lista de precios (Stack screen)
 │   │   ├── customers/       # Alta y detalle de cliente
-│   │   └── categories/      # Gestión de categorías
+│   │   ├── categories/      # Gestión de categorías
+│   │   └── admin/           # Panel admin interno (solo custom claim admin:true) — resumen, negocios, detalle
 │   ├── onboarding.tsx       # Guía inicial — se muestra una sola vez al registrarse
+│   ├── account-issue.tsx    # Pantalla de recuperación si users/businesses quedan inconsistentes
 │   └── _layout.tsx          # Root layout + guard de autenticación
 ├── src/
-│   ├── components/          # Componentes de dominio (CustomerCard, ProductCard, MovementItem, OfflineBanner, EmptyState, SearchBar…)
+│   ├── components/          # Componentes de dominio (CustomerCard, ProductCard, MovementItem, OfflineBanner, EmptyState, SearchBar, PlanBanner…)
 │   │   └── ui/               # Design system: Button, TextField, Card, Chip, IconChip, InlineMessage, ListRow, AmountDisplay, ConfirmDialog, Toast, ScreenHeader
-│   ├── context/             # AuthContext
+│   ├── context/             # AuthContext (sesión, negocio en tiempo real, plan, admin)
 │   ├── data/                # Datos estáticos (initialAlmacenProducts — lista inicial de 90 productos)
-│   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus…
-│   ├── models/              # Tipos TypeScript (Product, Customer, CashSession…)
-│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount, importInitialProducts…)
+│   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus, usePlanStatus, useWriteGuard…
+│   ├── models/              # Tipos TypeScript (Product, Customer, CashSession, BusinessPlan, Admin*…)
+│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount, importInitialProducts, admin…)
 │   ├── theme/               # Design tokens: paleta, tipografía (Manrope), spacing, radios, sombras
 │   ├── types/               # Declaraciones de tipos globales (env.d.ts)
-│   ├── utils/               # Cálculo de precios, template PDF
+│   ├── utils/               # Cálculo de precios, template PDF, estado de plan (planStatus.ts)
 │   └── constants/           # Categorías por defecto (10), colecciones Firestore
-├── assets/                  # Íconos y splash
+├── functions/               # Cloud Functions callable del panel admin (Node + Admin SDK, paquete npm separado)
+├── scripts/                 # bootstrap-admin.mjs, migrate-existing-plans.mjs, generate-icons.html, tests de Rules y de Functions
+├── docs/                    # Documentación profunda: SaaS, operación/deploy, branding
+├── assets/                  # Íconos, splash e ícono maestro (icon.svg) — ver docs/BRANDING_E_ICONOS.md
+├── firestore.rules          # Reglas de seguridad (fuente única de verdad, versionadas)
+├── firestore.indexes.json   # Índices de Firestore
+├── firebase.json            # Configuración de Firebase CLI (Rules, Functions, emuladores)
 ├── .env                     # Variables de entorno (no subir al repo)
 ├── .env.example             # Plantilla de variables
 ├── app.config.ts            # Configuración de Expo
@@ -184,6 +174,15 @@ MiNegocio/
 npm start          # Inicia el servidor de desarrollo (Expo Go)
 npm run android    # Inicia apuntando a Android
 npm run ios        # Inicia apuntando a iOS
+```
+
+Tests y emuladores (Firestore Rules, Cloud Functions) — detalle completo en
+`docs/OPERACION_ADMIN_Y_DESPLIEGUE.md`:
+
+```bash
+npm run test:unit               # Tests unitarios puros
+npm run test:rules:emulator     # Tests de Firestore Rules contra el emulador
+npm run test:functions:emulator # Tests de Cloud Functions contra el emulador
 ```
 
 ---
@@ -211,13 +210,16 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 
 - El archivo `.env` **no debe subirse al repositorio**. Está incluido en `.gitignore`.
 - Las variables `EXPO_PUBLIC_*` quedan incluidas en el bundle compilado; son equivalentes a las credenciales de cliente web de Firebase (comportamiento estándar del Firebase JS SDK).
-- Las **reglas de Firestore** son la capa de seguridad real: cada usuario solo puede leer y escribir su propio negocio.
+- Las **reglas de Firestore** (`firestore.rules`) son la capa de seguridad real: cada negocio solo puede leer y escribir sus propios datos, y solo puede escribir si su plan está activo (Pro o Trial vigente) — la UI bloquea antes por experiencia, pero el servidor rechaza igual si algo se salta la UI.
+- El campo `plan` de un negocio es inmutable desde el cliente bajo cualquier circunstancia — solo se modifica vía las Cloud Functions del panel admin, nunca escribiendo Firestore directo desde la app.
+- El custom claim `admin` (panel administrativo) solo lo asigna `scripts/bootstrap-admin.mjs` con credenciales fuera del repo — ningún cliente puede otorgárselo a sí mismo.
 
 ---
 
 ## Limitaciones conocidas
 
 - La generación de PDF requiere entorno nativo; no funciona en la versión web.
+- Lista completa de pendientes reales del SaaS (panel web, cobro, multiusuario, etc.): ver `docs/SAAS_ROADMAP.md`.
 
 ---
 
@@ -247,11 +249,24 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 
 ---
 
+## Documentación más profunda
+
+| Documento | Contenido |
+|---|---|
+| `docs/SAAS_ROADMAP.md` | Fuente de verdad del SaaS: fases, arquitectura de planes, Rules, Cloud Functions, panel admin, estado de despliegue, pendientes reales. |
+| `DECISIONES_TECNICAS.md` | Por qué se tomó cada decisión técnica, fase por fase. |
+| `docs/OPERACION_ADMIN_Y_DESPLIEGUE.md` | Cómo correr emuladores, tests, desplegar y operar el panel admin. |
+| `docs/BRANDING_E_ICONOS.md` | Identidad visual, ícono maestro y cómo regenerar los assets derivados. |
+| `MANUAL_USUARIO.md` | Manual para el usuario final de la app. |
+| `ROADMAP.md` | Historial de fases del producto (features de la app, no del SaaS). |
+
+---
+
 ## Licencia y derechos de autor
 
 ```
 Copyright © 2026 Cristian Delgado
-Correo: delgadocdev@hotmail.com
+Web: www.delgadodev.com.ar
 Ubicación: Maipú, Mendoza, Argentina
 
 Todos los derechos reservados.

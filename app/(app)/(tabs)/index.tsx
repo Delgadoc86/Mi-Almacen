@@ -9,6 +9,7 @@ import { useCashSession } from '@/hooks/useCashSession';
 import { theme } from '@/theme';
 import { Card, IconChip, ListRow } from '@/components/ui';
 import type { Tone } from '@/components/ui';
+import { PlanBanner } from '@/components/PlanBanner';
 
 function formatARS(n: number): string {
   return '$' + Math.round(n).toLocaleString('es-AR');
@@ -70,6 +71,8 @@ export default function HomeScreen() {
           </View>
           <IconChip icon="storefront" size="md" tone="primary" filled />
         </View>
+
+        <PlanBanner style={styles.planBanner} />
 
         <Card style={styles.dashCard}>
           <ListRow
@@ -152,6 +155,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
 
+  planBanner: {
+    marginBottom: theme.spacing.xl,
+  },
   dashCard: {
     overflow: 'hidden',
     marginBottom: theme.spacing.xl,

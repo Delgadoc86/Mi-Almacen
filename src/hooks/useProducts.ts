@@ -8,6 +8,7 @@ export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!userProfile?.businessId) return;
@@ -24,7 +25,11 @@ export function useProducts() {
       },
     );
     return unsub;
-  }, [userProfile?.businessId]);
+    // retryKey solo fuerza la resuscripción manual — no es un dato real.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.businessId, retryKey]);
 
-  return { products, loading, error };
+  const retry = () => setRetryKey((k) => k + 1);
+
+  return { products, loading, error, retry };
 }

@@ -32,7 +32,6 @@ export const theme = {
     dangerMid: '#F5D9D9',
 
     overlay: 'rgba(22, 33, 58, 0.06)',
-    offline: '#37415A',
   },
 
   fontFamily: {

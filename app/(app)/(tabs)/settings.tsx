@@ -7,12 +7,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { updateBusiness, updateBusinessPreferences } from '@/services/userProfile';
 import { exportBusinessData } from '@/services/exportData';
-import { deleteBusinessData, deleteUserProfile, deleteAuthUser } from '@/services/deleteAccount';
+import { requestAccountDeletion } from '@/services/deleteAccount';
 import { ROUND_OPTIONS, DEFAULT_MARGIN_MAX } from '@/constants';
 import { theme } from '@/theme';
 import { Button, Card, Chip, ConfirmDialog, InlineMessage, ListRow, TextField, Toast } from '@/components/ui';
+import { PlanBanner, HEALTHY_PLAN_KINDS, openSupportSite } from '@/components/PlanBanner';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
+import { usePlanStatus } from '@/hooks/usePlanStatus';
 import type { RoundTo } from '@/models';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -36,12 +40,12 @@ function daysSince(isoDate: string): number {
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
-type DeleteStep = 'none' | 'first' | 'second';
-
 export default function SettingsScreen() {
   const router = useRouter();
-  const { business, userProfile, logout, refreshBusiness } = useAuth();
+  const { business, userProfile, isAdmin, logout, refreshBusiness } = useAuth();
   const { categories } = useCategories();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
+  const planStatus = usePlanStatus();
 
   const [businessName, setBusinessName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -53,8 +57,8 @@ export default function SettingsScreen() {
 
   const [exporting, setExporting] = useState(false);
   const [lastExportAt, setLastExportAt] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteStep, setDeleteStep] = useState<DeleteStep>('none');
+  const [requestingDeletion, setRequestingDeletion] = useState(false);
+  const [confirmDeletionVisible, setConfirmDeletionVisible] = useState(false);
   const [confirmLogoutVisible, setConfirmLogoutVisible] = useState(false);
 
   const [toastMessage, setToastMessage] = useState('');
@@ -138,28 +142,18 @@ export default function SettingsScreen() {
     }
   }
 
-  async function confirmDelete() {
-    setDeleteStep('none');
+  async function handleRequestDeletion() {
+    setConfirmDeletionVisible(false);
     if (!userProfile) return;
-    setDeleting(true);
+    setRequestingDeletion(true);
     try {
-      await deleteBusinessData(userProfile.businessId);
-      await deleteUserProfile(userProfile.uid);
-      await deleteAuthUser();
-      // El listener de auth detecta la eliminación y redirige al login automáticamente
-    } catch (err) {
-      const code = (err as { code?: string })?.code;
-      if (code === 'auth/requires-recent-login') {
-        Alert.alert(
-          'Sesión expirada',
-          'Por seguridad, cerrá sesión e ingresá de nuevo antes de eliminar tu cuenta.',
-          [{ text: 'Entendido' }],
-        );
-      } else {
-        const msg = err instanceof Error ? err.message : 'No se pudo eliminar la cuenta.';
-        Alert.alert('Error', msg);
-      }
-      setDeleting(false);
+      await requestAccountDeletion(userProfile.businessId);
+      await refreshBusiness();
+      showToast('Solicitud enviada. Te vamos a contactar.');
+    } catch {
+      Alert.alert('Error', 'No se pudo enviar la solicitud. Intentá de nuevo.');
+    } finally {
+      setRequestingDeletion(false);
     }
   }
 
@@ -178,6 +172,21 @@ export default function SettingsScreen() {
         <Text style={styles.pageTitle}>Configuración</Text>
         <Text style={styles.pageSubtitle}>Datos y preferencias de tu comercio</Text>
 
+        <PlanBanner style={styles.planBanner} />
+
+        {HEALTHY_PLAN_KINDS.has(planStatus.kind) && (
+          <Card style={styles.linkCard}>
+            <ListRow
+              icon={planStatus.kind === 'pro' ? 'star' : 'star-outline'}
+              iconTone={planStatus.kind === 'pro' ? 'success' : 'primary'}
+              title="Plan"
+              subtitle={planStatus.kind === 'pro' ? 'Pro activo' : planStatus.message}
+              onPress={planStatus.kind === 'trial-active' ? openSupportSite : undefined}
+              showChevron={planStatus.kind === 'trial-active'}
+            />
+          </Card>
+        )}
+
         <Text style={styles.sectionLabel}>MI COMERCIO</Text>
         <Card style={styles.card}>
           <TextField
@@ -190,7 +199,7 @@ export default function SettingsScreen() {
           />
           <Button
             label="Guardar nombre"
-            onPress={handleSaveName}
+            onPress={() => requireWrite(handleSaveName)}
             loading={savingName}
             style={styles.saveBtn}
           />
@@ -265,7 +274,7 @@ export default function SettingsScreen() {
 
           <Button
             label="Guardar preferencias"
-            onPress={handleSavePrefs}
+            onPress={() => requireWrite(handleSavePrefs)}
             loading={savingPrefs}
             style={styles.saveBtnTop}
           />
@@ -294,6 +303,14 @@ export default function SettingsScreen() {
             title="Ver guía inicial"
             subtitle="Los primeros pasos para usar Mi Almacén"
             onPress={() => router.push('/onboarding?from=settings')}
+          />
+          <View style={styles.divider} />
+          <ListRow
+            icon="chatbubble-ellipses-outline"
+            iconTone="primary"
+            title="Contactar soporte"
+            subtitle="Consultas, activar Pro o reportar un problema"
+            onPress={openSupportSite}
           />
         </Card>
 
@@ -354,26 +371,54 @@ export default function SettingsScreen() {
 
         <Text style={[styles.sectionLabel, styles.dangerLabel]}>ZONA PELIGROSA</Text>
         <View style={styles.dangerCard}>
-          <Text style={styles.dangerTitle}>Eliminar cuenta y todos los datos</Text>
-          <Text style={styles.dangerDesc}>
-            Borrará permanentemente todos tus productos, clientes, fiados, cajas y tu cuenta.
-            Esta acción no se puede deshacer.
-          </Text>
-          <Text style={styles.dangerTip}>
-            Recomendamos exportar tus datos antes de continuar.
-          </Text>
-          <TouchableOpacity
-            style={[styles.deleteBtn, deleting && styles.saveBtnDisabled]}
-            onPress={() => setDeleteStep('first')}
-            disabled={deleting}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
-            <Text style={styles.deleteBtnText}>
-              {deleting ? 'Eliminando...' : 'Eliminar mi cuenta'}
-            </Text>
-          </TouchableOpacity>
+          {business?.deletionRequest ? (
+            <>
+              <Text style={styles.dangerTitle}>Solicitud de eliminación enviada</Text>
+              <Text style={styles.dangerDesc}>
+                {formatLastLogin(business.deletionRequest.requestedAt)
+                  ? `Enviada el ${formatLastLogin(business.deletionRequest.requestedAt)}. `
+                  : ''}
+                Nuestro equipo te va a contactar para confirmar el borrado de tus datos.
+                Mientras tanto tu cuenta sigue activa y podés seguir usándola con normalidad.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.dangerTitle}>Eliminar cuenta y todos los datos</Text>
+              <Text style={styles.dangerDesc}>
+                Enviá una solicitud y nuestro equipo de soporte la procesa manualmente.
+                Tu cuenta sigue activa hasta que se confirme el borrado — no se borra nada
+                al instante.
+              </Text>
+              <TouchableOpacity
+                style={[styles.deleteBtn, requestingDeletion && styles.saveBtnDisabled]}
+                onPress={() => setConfirmDeletionVisible(true)}
+                disabled={requestingDeletion}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
+                <Text style={styles.deleteBtnText}>
+                  {requestingDeletion ? 'Enviando...' : 'Solicitar eliminación de cuenta'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
+
+        {isAdmin ? (
+          <>
+            <Text style={styles.sectionLabel}>ADMINISTRACIÓN</Text>
+            <Card style={styles.linkCard}>
+              <ListRow
+                icon="shield-checkmark-outline"
+                iconTone="primary"
+                title="Panel de administración"
+                subtitle="Solo visible para tu cuenta"
+                onPress={() => router.push('/admin')}
+              />
+            </Card>
+          </>
+        ) : null}
       </ScrollView>
 
       <ConfirmDialog
@@ -387,24 +432,14 @@ export default function SettingsScreen() {
       />
 
       <ConfirmDialog
-        visible={deleteStep === 'first'}
-        title="Eliminar cuenta"
-        message={'Se borrarán todos tus datos: productos, clientes, fiados e historial de caja.\n\nEsta acción no se puede deshacer.'}
-        confirmLabel="Continuar"
+        visible={confirmDeletionVisible}
+        title="Solicitar eliminación de cuenta"
+        message={`Le vamos a avisar a soporte que "${business?.name ?? 'tu negocio'}" quiere eliminar su cuenta. No se borra nada todavía — te vamos a contactar para confirmarlo.`}
+        confirmLabel="Enviar solicitud"
         variant="destructive"
-        onConfirm={() => setDeleteStep('second')}
-        onCancel={() => setDeleteStep('none')}
-      />
-
-      <ConfirmDialog
-        visible={deleteStep === 'second'}
-        title="¿Estás seguro?"
-        message={`Vas a eliminar la cuenta de "${business?.name ?? 'tu negocio'}" permanentemente.`}
-        confirmLabel="ELIMINAR TODO"
-        variant="destructive"
-        loading={deleting}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteStep('none')}
+        loading={requestingDeletion}
+        onConfirm={handleRequestDeletion}
+        onCancel={() => setConfirmDeletionVisible(false)}
       />
 
       <Toast
@@ -412,6 +447,7 @@ export default function SettingsScreen() {
         message={toastMessage}
         onHide={() => setToastVisible(false)}
       />
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </SafeAreaView>
   );
 }
@@ -444,6 +480,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
   },
   dangerLabel: { color: theme.colors.error },
+  planBanner: { marginBottom: theme.spacing.xl },
 
   card: {
     padding: theme.spacing.lg,
@@ -490,10 +527,6 @@ const styles = StyleSheet.create({
   dangerDesc: {
     fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.error, lineHeight: 19,
     opacity: 0.8, marginBottom: 8,
-  },
-  dangerTip: {
-    fontFamily: theme.fontFamily.medium, fontSize: theme.font.micro, color: theme.colors.textSecondary,
-    fontStyle: 'italic', marginBottom: theme.spacing.md + 2,
   },
   deleteBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

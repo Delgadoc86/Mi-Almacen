@@ -11,11 +11,13 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { createProduct } from '@/services/products';
 import { calculatePrice } from '@/utils/pricing';
 import { ROUND_OPTIONS } from '@/constants';
 import { theme } from '@/theme';
 import { AmountDisplay, Button, Card, Chip, TextField } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import type { ProductType, RoundTo } from '@/models';
 
 const TYPE_OPTIONS: { label: string; value: ProductType }[] = [
@@ -28,6 +30,7 @@ export default function NewProductScreen() {
   const router = useRouter();
   const { userProfile, business } = useAuth();
   const { categories } = useCategories();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [name, setName] = useState('');
   const [type, setType] = useState<ProductType>('unidad');
@@ -235,8 +238,9 @@ export default function NewProductScreen() {
           </>
         )}
 
-        <Button label="Guardar producto" onPress={handleSave} loading={saving} style={styles.saveBtn} />
+        <Button label="Guardar producto" onPress={() => requireWrite(handleSave)} loading={saving} style={styles.saveBtn} />
       </ScrollView>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </KeyboardAvoidingView>
   );
 }

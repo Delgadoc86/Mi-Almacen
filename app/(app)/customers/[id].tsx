@@ -15,8 +15,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCustomer } from '@/hooks/useCustomer';
 import { useCustomerMovements } from '@/hooks/useCustomerMovements';
 import { useCashSession } from '@/hooks/useCashSession';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { registerMovement, annulMovement } from '@/services/customers';
 import { MovementItem } from '@/components/MovementItem';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import { theme } from '@/theme';
 import { AmountDisplay, Chip, IconChip, TextField } from '@/components/ui';
 import type { MovementType, PaymentMethod } from '@/models';
@@ -36,6 +38,7 @@ export default function CustomerDetailScreen() {
   const { movements, loading: movementsLoading } = useCustomerMovements(id ?? '');
   const { session } = useCashSession();
   const cajaAbierta = session?.status === 'open';
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [activeForm, setActiveForm] = useState<MovementType | null>(null);
   const [amount, setAmount] = useState('');
@@ -158,14 +161,14 @@ export default function CustomerDetailScreen() {
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.fiadoBtn]}
-            onPress={() => openForm('fiado')}
+            onPress={() => requireWrite(() => openForm('fiado'))}
             activeOpacity={0.8}
           >
             <Text style={[styles.actionBtnText, styles.fiadoBtnText]}>+ Fiado</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.pagoBtn, !hasDebt && styles.actionBtnDisabled]}
-            onPress={() => hasDebt && openForm('pago')}
+            onPress={() => hasDebt && requireWrite(() => openForm('pago'))}
             activeOpacity={hasDebt ? 0.8 : 1}
           >
             <Text style={[styles.actionBtnText, styles.pagoBtnText, !hasDebt && styles.actionBtnTextDisabled]}>
@@ -241,7 +244,7 @@ export default function CustomerDetailScreen() {
                   activeForm === 'fiado' ? styles.confirmFiado : styles.confirmPago,
                   saving && styles.btnDisabled,
                 ]}
-                onPress={handleConfirm}
+                onPress={() => requireWrite(handleConfirm)}
                 disabled={saving}
                 activeOpacity={0.8}
               >
@@ -270,11 +273,17 @@ export default function CustomerDetailScreen() {
           </View>
         ) : (
           movements.map((m) => (
-            <MovementItem key={m.id} movement={m} onAnnul={() => handleAnnul(m.id)} />
+            <MovementItem
+              key={m.id}
+              movement={m}
+              onAnnul={() => handleAnnul(m.id)}
+              requireWrite={requireWrite}
+            />
           ))
         )}
       </ScrollView>
       </KeyboardAvoidingView>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </>
   );
 }

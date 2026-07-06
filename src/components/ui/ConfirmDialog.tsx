@@ -11,7 +11,10 @@ type Props = {
   variant?: 'default' | 'destructive';
   loading?: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
+  // Opcional: cuando se omite, el diálogo muestra un único botón (onConfirm)
+  // en vez de Cancelar/Confirmar — para avisos informativos, no decisiones
+  // (ver PlanRestrictionDialog, Fase 4).
+  onCancel?: () => void;
 };
 
 export function ConfirmDialog({
@@ -25,14 +28,17 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
+  const dismiss = onCancel ?? onConfirm;
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.overlay} onPress={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}>
+      <Pressable style={styles.overlay} onPress={dismiss}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           <View style={styles.actions}>
-            <Button label={cancelLabel} variant="ghost" onPress={onCancel} style={styles.actionBtn} />
+            {onCancel ? (
+              <Button label={cancelLabel} variant="ghost" onPress={onCancel} style={styles.actionBtn} />
+            ) : null}
             <Button
               label={confirmLabel}
               variant={variant === 'destructive' ? 'danger' : 'primary'}

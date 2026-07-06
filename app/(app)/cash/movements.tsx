@@ -4,11 +4,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCashSession } from '@/hooks/useCashSession';
 import { useCashMovements } from '@/hooks/useCashMovements';
 import { useAuth } from '@/hooks/useAuth';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { annulCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
 import { ConfirmDialog } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import type { CashMovement } from '@/models';
+
+type RequireWrite = (action: () => void) => void;
 
 const PAYMENT_LABEL: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -37,9 +41,11 @@ function getMovSubtitle(mov: CashMovement): string {
 function MovementRow({
   movement,
   onAnnul,
+  requireWrite,
 }: {
   movement: CashMovement;
   onAnnul?: () => void;
+  requireWrite: RequireWrite;
 }) {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const isIngreso = movement.type === 'ingreso';
@@ -60,7 +66,7 @@ function MovementRow({
 
   function handleConfirmAnnul() {
     setConfirmVisible(false);
-    onAnnul?.();
+    requireWrite(() => onAnnul?.());
   }
 
   return (
@@ -77,7 +83,7 @@ function MovementRow({
         {canAnnul && (
           <TouchableOpacity
             style={styles.movMenuBtn}
-            onPress={() => setConfirmVisible(true)}
+            onPress={() => requireWrite(() => setConfirmVisible(true))}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="ellipsis-vertical" size={20} color={theme.colors.muted} />
@@ -105,6 +111,7 @@ export default function CashMovementsScreen() {
   const { session } = useCashSession();
   const { movements, loading } = useCashMovements(session?.id ?? null, 100);
   const { userProfile } = useAuth();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   async function handleAnnulMovement(movementId: string) {
     if (!userProfile?.businessId || !session?.id) return;
@@ -137,25 +144,29 @@ export default function CashMovementsScreen() {
   }
 
   return (
-    <FlatList
-      style={styles.list}
-      data={movements}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <MovementRow
-          movement={item}
-          onAnnul={() => handleAnnulMovement(item.id)}
-        />
-      )}
-      ItemSeparatorComponent={Separator}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.listContent}
-      ListHeaderComponent={
-        <Text style={styles.listCount}>
-          {movements.length} {movements.length === 1 ? 'movimiento' : 'movimientos'}
-        </Text>
-      }
-    />
+    <>
+      <FlatList
+        style={styles.list}
+        data={movements}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <MovementRow
+            movement={item}
+            onAnnul={() => handleAnnulMovement(item.id)}
+            requireWrite={requireWrite}
+          />
+        )}
+        ItemSeparatorComponent={Separator}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <Text style={styles.listCount}>
+            {movements.length} {movements.length === 1 ? 'movimiento' : 'movimientos'}
+          </Text>
+        }
+      />
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
+    </>
   );
 }
 

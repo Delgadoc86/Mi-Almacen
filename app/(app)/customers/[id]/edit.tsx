@@ -5,9 +5,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
 import { useCustomer } from '@/hooks/useCustomer';
 import { useCustomerMovements } from '@/hooks/useCustomerMovements';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { updateCustomer, deleteCustomer } from '@/services/customers';
 import { theme } from '@/theme';
 import { AmountDisplay, Button, ConfirmDialog, InlineMessage, TextField } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 
 export default function EditCustomerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,6 +17,7 @@ export default function EditCustomerScreen() {
   const { userProfile } = useAuth();
   const { customer, loading: customerLoading } = useCustomer(id ?? '');
   const { movements, loading: movementsLoading } = useCustomerMovements(id ?? '');
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -150,7 +153,7 @@ export default function EditCustomerScreen() {
           placeholder="Ej: Doña Pocha, vecina de la esquina"
           autoCapitalize="sentences"
           returnKeyType="done"
-          onSubmitEditing={handleSave}
+          onSubmitEditing={() => requireWrite(handleSave)}
           containerStyle={styles.field}
         />
 
@@ -158,7 +161,7 @@ export default function EditCustomerScreen() {
 
         <Button
           label="Guardar cambios"
-          onPress={handleSave}
+          onPress={() => requireWrite(handleSave)}
           loading={saving}
           disabled={deleting}
           style={styles.saveBtn}
@@ -181,7 +184,7 @@ export default function EditCustomerScreen() {
             label="Eliminar cliente"
             variant="danger"
             icon="trash-outline"
-            onPress={() => setConfirmDeleteVisible(true)}
+            onPress={() => requireWrite(() => setConfirmDeleteVisible(true))}
             loading={deleting}
             disabled={saving}
           />
@@ -194,9 +197,10 @@ export default function EditCustomerScreen() {
         message={`¿Eliminás a "${customer.name}"? Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         variant="destructive"
-        onConfirm={handleConfirmDelete}
+        onConfirm={() => requireWrite(handleConfirmDelete)}
         onCancel={() => setConfirmDeleteVisible(false)}
       />
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </KeyboardAvoidingView>
   );
 }

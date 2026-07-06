@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { initializeAuth, getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // getReactNativePersistence lives in the RN bundle of firebase/auth (resolved by Metro)
@@ -36,6 +37,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let functionsInstance: Functions;
 
 try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -52,9 +54,11 @@ try {
   }
 
   db = getFirestore(app);
+  functionsInstance = getFunctions(app);
 } catch (e) {
   console.warn('[Firebase] Error al inicializar Firebase:', e);
   throw e;
 }
 
 export { auth, db };
+export const functions = functionsInstance;

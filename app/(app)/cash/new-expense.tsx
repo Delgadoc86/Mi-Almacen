@@ -12,14 +12,17 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useCashSession } from '@/hooks/useCashSession';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { addCashMovement } from '@/services/cash';
 import { theme } from '@/theme';
 import { InlineMessage, TextField } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 
 export default function NewExpenseScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const { session } = useCashSession();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
   const descriptionRef = useRef<TextInput>(null);
 
   const [amount, setAmount] = useState('');
@@ -92,7 +95,7 @@ export default function NewExpenseScreen() {
           placeholder="Ej: proveedor, flete, limpieza, reposición..."
           autoCapitalize="sentences"
           returnKeyType="done"
-          onSubmitEditing={handleSave}
+          onSubmitEditing={() => requireWrite(handleSave)}
           containerStyle={styles.field}
         />
 
@@ -100,7 +103,7 @@ export default function NewExpenseScreen() {
 
         <TouchableOpacity
           style={[styles.saveBtn, !canSave && styles.btnDisabled]}
-          onPress={handleSave}
+          onPress={() => requireWrite(handleSave)}
           disabled={!canSave}
           activeOpacity={0.85}
         >
@@ -111,6 +114,7 @@ export default function NewExpenseScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </KeyboardAvoidingView>
   );
 }

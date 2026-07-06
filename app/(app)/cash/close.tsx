@@ -3,9 +3,11 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useCashSession } from '@/hooks/useCashSession';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { closeCashSession } from '@/services/cash';
 import { theme } from '@/theme';
 import { AmountDisplay, Button, Card, InlineMessage } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 
 function formatARS(amount: number): string {
   return '$' + Math.round(amount).toLocaleString('es-AR');
@@ -41,6 +43,7 @@ export default function CloseCashScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const { session } = useCashSession();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
   const [closing, setClosing] = useState(false);
   const [error, setError] = useState('');
 
@@ -123,7 +126,7 @@ export default function CloseCashScreen() {
       <Button
         label="CONFIRMAR CIERRE"
         icon="lock-closed"
-        onPress={handleConfirm}
+        onPress={() => requireWrite(handleConfirm)}
         loading={closing}
         style={styles.confirmBtn}
       />
@@ -131,6 +134,7 @@ export default function CloseCashScreen() {
       <Text style={styles.closeNote}>
         Los datos quedan guardados. Si cerrás por error, podés reabrir la caja.
       </Text>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </ScrollView>
   );
 }

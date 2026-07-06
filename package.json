@@ -25,14 +25,23 @@
     "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "~19.1.0",
+    "firebase-admin": "^14.1.0",
+    "google-auth-library": "^10.9.0",
     "typescript": "~5.9.2"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "emulators": "firebase emulators:start --only firestore,auth,functions",
+    "test:rules": "node --test scripts/rules-tests/*.test.mjs",
+    "test:rules:emulator": "firebase emulators:exec --only firestore,auth \"npm run test:rules\"",
+    "test:functions": "node --test scripts/functions-tests/*.test.mjs",
+    "test:functions:emulator": "firebase emulators:exec --only functions,firestore,auth \"npm run test:functions\"",
+    "test:unit": "node --experimental-strip-types --test src/utils/*.test.ts"
   },
   "private": true
 }

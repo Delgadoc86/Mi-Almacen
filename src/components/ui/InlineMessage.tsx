@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme } from '@/theme';
 import type { IconName } from './types';
@@ -10,6 +10,8 @@ type Props = {
   text: string;
   icon?: IconName;
   style?: StyleProp<ViewStyle>;
+  actionLabel?: string;
+  onPressAction?: () => void;
 };
 
 const VARIANT_STYLE: Record<Variant, { bg: string; border: string; text: string; icon: IconName }> = {
@@ -39,12 +41,17 @@ const VARIANT_STYLE: Record<Variant, { bg: string; border: string; text: string;
   },
 };
 
-export function InlineMessage({ variant, text, icon, style }: Props) {
+export function InlineMessage({ variant, text, icon, style, actionLabel, onPressAction }: Props) {
   const v = VARIANT_STYLE[variant];
   return (
     <View style={[styles.base, { backgroundColor: v.bg, borderColor: v.border }, style]}>
       <Ionicons name={icon ?? v.icon} size={18} color={v.text} />
       <Text style={[styles.text, { color: v.text }]}>{text}</Text>
+      {actionLabel && onPressAction ? (
+        <Pressable onPress={onPressAction} hitSlop={8}>
+          <Text style={[styles.action, { color: v.text }]}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -64,5 +71,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.medium,
     fontSize: theme.font.caption,
     lineHeight: 18,
+  },
+  action: {
+    fontFamily: theme.fontFamily.bold,
+    fontSize: theme.font.caption,
+    textDecorationLine: 'underline',
   },
 });

@@ -1,95 +1,20 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  writeBatch,
-  deleteDoc,
-} from 'firebase/firestore';
-import { deleteUser } from 'firebase/auth';
-import { db, auth } from './firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase';
 import { FIRESTORE_COLLECTIONS } from '@/constants';
 
-// Deletes all docs in a collection in batches of 400 (safe margin under 500 limit)
-async function deleteCollection(collPath: string[]): Promise<void> {
-  const ref = collection(db, ...collPath as [string, ...string[]]);
-  const snap = await getDocs(ref);
-  if (snap.empty) return;
-
-  const chunks: typeof snap.docs[] = [];
-  for (let i = 0; i < snap.docs.length; i += 400) {
-    chunks.push(snap.docs.slice(i, i + 400));
-  }
-
-  for (const chunk of chunks) {
-    const batch = writeBatch(db);
-    chunk.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-  }
-}
-
-export async function deleteBusinessData(businessId: string): Promise<void> {
-  // 1. Customer movements (subcollections first)
-  const customersSnap = await getDocs(
-    collection(db, FIRESTORE_COLLECTIONS.BUSINESSES, businessId, FIRESTORE_COLLECTIONS.CUSTOMERS),
-  );
-  await Promise.all(
-    customersSnap.docs.map((custDoc) =>
-      deleteCollection([
-        FIRESTORE_COLLECTIONS.BUSINESSES, businessId,
-        FIRESTORE_COLLECTIONS.CUSTOMERS, custDoc.id,
-        FIRESTORE_COLLECTIONS.MOVEMENTS,
-      ]),
-    ),
-  );
-
-  // 2. Customers
-  await deleteCollection([
-    FIRESTORE_COLLECTIONS.BUSINESSES, businessId,
-    FIRESTORE_COLLECTIONS.CUSTOMERS,
-  ]);
-
-  // 3. Cash movements (subcollections first)
-  const sessionsSnap = await getDocs(
-    collection(db, FIRESTORE_COLLECTIONS.BUSINESSES, businessId, FIRESTORE_COLLECTIONS.CASH_SESSIONS),
-  );
-  await Promise.all(
-    sessionsSnap.docs.map((sessionDoc) =>
-      deleteCollection([
-        FIRESTORE_COLLECTIONS.BUSINESSES, businessId,
-        FIRESTORE_COLLECTIONS.CASH_SESSIONS, sessionDoc.id,
-        FIRESTORE_COLLECTIONS.CASH_MOVEMENTS,
-      ]),
-    ),
-  );
-
-  // 4. Cash sessions
-  await deleteCollection([
-    FIRESTORE_COLLECTIONS.BUSINESSES, businessId,
-    FIRESTORE_COLLECTIONS.CASH_SESSIONS,
-  ]);
-
-  // 5. Products
-  await deleteCollection([
-    FIRESTORE_COLLECTIONS.BUSINESSES, businessId,
-    FIRESTORE_COLLECTIONS.PRODUCTS,
-  ]);
-
-  // 6. Categories
-  await deleteCollection([
-    FIRESTORE_COLLECTIONS.BUSINESSES, businessId,
-    FIRESTORE_COLLECTIONS.CATEGORIES,
-  ]);
-
-  // 7. Business document
-  await deleteDoc(doc(db, FIRESTORE_COLLECTIONS.BUSINESSES, businessId));
-}
-
-export async function deleteUserProfile(uid: string): Promise<void> {
-  await deleteDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, uid));
-}
-
-export async function deleteAuthUser(): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) throw new Error('No hay sesión activa.');
-  await deleteUser(user);
+// El borrado real (negocio + perfil + cuenta de Firebase Auth) se removió
+// de acá a propósito. Encadenaba tres operaciones no atómicas desde el
+// cliente: si `deleteUser()` fallaba (ej. auth/requires-recent-login,
+// exigido por Firebase para operaciones sensibles) DESPUÉS de que negocio
+// y perfil ya se habían borrado, la cuenta quedaba viva sin datos —  y
+// el próximo login podía terminar generando un negocio y un trial nuevos.
+// firestore.rules ahora deniega delete sobre `businesses/{uid}` y
+// `users/{uid}` para cualquier cliente, así que ese camino ya ni siquiera
+// es posible. El borrado real de una cuenta se resuelve en Fase 6, vía
+// Admin SDK/Cloud Function (una sola operación server-side, sin pasos
+// intermedios que puedan dejar datos a medio borrar).
+export async function requestAccountDeletion(businessId: string): Promise<void> {
+  await updateDoc(doc(db, FIRESTORE_COLLECTIONS.BUSINESSES, businessId), {
+    deletionRequest: { requestedAt: serverTimestamp() },
+  });
 }

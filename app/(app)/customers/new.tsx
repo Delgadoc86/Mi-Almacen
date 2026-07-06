@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { createCustomer } from '@/services/customers';
 import { theme } from '@/theme';
 import { Button, InlineMessage, TextField } from '@/components/ui';
+import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 
 export default function NewCustomerScreen() {
   const router = useRouter();
   const { firebaseUser, userProfile } = useAuth();
+  const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -85,14 +88,15 @@ export default function NewCustomerScreen() {
           placeholder="Ej: Doña Pocha, vecina de la esquina"
           autoCapitalize="sentences"
           returnKeyType="done"
-          onSubmitEditing={handleSave}
+          onSubmitEditing={() => requireWrite(handleSave)}
           containerStyle={styles.field}
         />
 
         {error ? <InlineMessage variant="error" text={error} style={styles.field} /> : null}
 
-        <Button label="Guardar cliente" onPress={handleSave} loading={saving} style={styles.saveBtn} />
+        <Button label="Guardar cliente" onPress={() => requireWrite(handleSave)} loading={saving} style={styles.saveBtn} />
       </ScrollView>
+      <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
     </KeyboardAvoidingView>
   );
 }
