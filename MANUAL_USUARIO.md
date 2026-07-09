@@ -1,6 +1,6 @@
 # Manual del Usuario — Mi Almacén
 
-**Versión 1.3.0**
+**Versión 1.4.0**
 Aplicación de gestión para almacenes, kioscos y despensas.
 
 ---
@@ -242,6 +242,10 @@ Tocar **Administrar categorías** para ver y gestionar las categorías:
 
 - **Cerrar sesión** — cierra la sesión actual. Los datos quedan guardados en la nube.
 - **Solicitar eliminación de cuenta** — al final de Configuración, en la sección "Zona peligrosa". Envía un aviso a soporte pidiendo el borrado de la cuenta. **No borra nada al instante**: su cuenta sigue activa y puede seguir usándola con normalidad mientras el equipo de soporte procesa la solicitud manualmente. Una vez enviada, la pantalla muestra la fecha en que se solicitó y no se puede volver a solicitar (ya quedó registrada).
+
+### Versión de la app y avisos de actualización
+
+Al final de Configuración siempre puede ver qué versión de Mi Almacén tiene instalada ("Versión de la app: X.X.X"). Cuando publicamos una versión nueva, puede aparecer un aviso al abrir la app invitándolo a actualizar, con un botón para ir a la página de descarga. Si no quiere actualizar en ese momento, toque **"Ahora no"**: el aviso se cierra y no vuelve a molestarlo hasta la próxima vez que abra la app.
 
 ---
 

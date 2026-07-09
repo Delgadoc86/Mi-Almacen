@@ -6,7 +6,7 @@ import {
   orderBy,
   query,
 } from 'firebase/firestore';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { db } from './firebase';
 import { FIRESTORE_COLLECTIONS } from '@/constants';

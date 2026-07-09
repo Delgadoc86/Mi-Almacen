@@ -17,6 +17,7 @@ import { Button, Card, Chip, ConfirmDialog, InlineMessage, ListRow, TextField, T
 import { PlanBanner, HEALTHY_PLAN_KINDS, openSupportSite } from '@/components/PlanBanner';
 import { PlanRestrictionDialog } from '@/components/PlanRestrictionDialog';
 import { usePlanStatus } from '@/hooks/usePlanStatus';
+import { getInstalledAppVersion } from '@/utils/appVersion';
 import type { RoundTo } from '@/models';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -419,6 +420,8 @@ export default function SettingsScreen() {
             </Card>
           </>
         ) : null}
+
+        <Text style={styles.versionText}>Versión de la app: {getInstalledAppVersion() ?? '—'}</Text>
       </ScrollView>
 
       <ConfirmDialog
@@ -534,4 +537,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, paddingVertical: theme.spacing.md + 2,
   },
   deleteBtnText: { fontFamily: theme.fontFamily.bold, fontSize: theme.font.body, color: theme.colors.error },
+
+  versionText: {
+    fontFamily: theme.fontFamily.medium,
+    fontSize: theme.font.micro,
+    color: theme.colors.muted,
+    textAlign: 'center',
+    marginTop: theme.spacing.xl,
+  },
 });

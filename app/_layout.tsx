@@ -13,6 +13,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/theme';
 import { ConnectionErrorScreen } from '@/components/ConnectionErrorScreen';
+import { UpdateModal } from '@/components/UpdateModal';
 
 function RootGuard() {
   const { firebaseUser, userProfile, accountInconsistent, loading, authError, retryProfileLoad } = useAuth();
@@ -86,7 +87,12 @@ function RootGuard() {
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      <UpdateModal />
+    </>
+  );
 }
 
 export default function RootLayout() {

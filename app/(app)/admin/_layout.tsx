@@ -25,6 +25,7 @@ export default function AdminLayout() {
       <Stack.Screen name="index" options={{ title: 'Panel Admin' }} />
       <Stack.Screen name="businesses" options={{ title: 'Negocios' }} />
       <Stack.Screen name="business/[businessId]" options={{ title: 'Detalle de negocio' }} />
+      <Stack.Screen name="update-config" options={{ title: 'Configurar actualización' }} />
     </Stack>
   );
 }

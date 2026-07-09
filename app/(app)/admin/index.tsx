@@ -97,6 +97,14 @@ export default function AdminDashboardScreen() {
             subtitle="Buscar, filtrar y administrar cuentas"
             onPress={() => router.push('/admin/businesses')}
           />
+          <View style={styles.divider} />
+          <ListRow
+            icon="cloud-upload-outline"
+            iconTone="primary"
+            title="Configurar actualización"
+            subtitle="Avisar a los usuarios de una nueva versión"
+            onPress={() => router.push('/admin/update-config')}
+          />
         </Card>
       </ScrollView>
     </SafeAreaView>
@@ -150,4 +158,5 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   linkCard: { padding: 0, overflow: 'hidden' },
+  divider: { height: 1, backgroundColor: theme.colors.divider },
 });

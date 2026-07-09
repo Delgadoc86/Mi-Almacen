@@ -116,6 +116,14 @@ numeración de fases, independiente de la de este documento — ver
 - Selector de categoría: generar el catálogo completo (default) o reimprimir una sola categoría
 - Plantilla del PDF alineada a la paleta de marca en lugar de colores propios desconectados del theme
 
+## ✅ Fase 17 — Aviso de actualización de versión
+- Versión instalada del binario nativo visible siempre en Configuración (`expo-application`, con fallback a `Constants.expoConfig.version` en Expo Go/dev)
+- Nueva colección `appConfig/updateInfo`: lectura pública, escritura solo con el custom claim `admin`
+- Comparación de versiones numérica por partes (`"1.9.0" < "1.10.0"`, no por orden alfabético)
+- Diálogo no bloqueante (`UpdateModal`) con "Actualizar ahora" (abre la web de descarga) y "Ahora no" (se puede posponer, vuelve a evaluarse en el próximo reinicio)
+- Pantalla nueva en el panel admin (`/admin/update-config`) para activar/desactivar el aviso y cargar versión, título, mensaje y URL de descarga
+- Corrección de bug encontrado en el camino: `expo-file-system` v19 (SDK 54) rompía "Exportar mis datos (JSON)" — la API usada se movió a `expo-file-system/legacy`
+
 ## 🔲 Por definir
 
 - Estadísticas y reportes

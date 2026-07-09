@@ -22,6 +22,14 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == businessId;
     }
 
+    // Admin: custom claim `admin` del ID token de Firebase Auth (Fase 6),
+    // asignado únicamente por scripts/bootstrap-admin.mjs vía Admin SDK —
+    // igual chequeo que usa el cliente en src/context/AuthContext.tsx
+    // (`tokenResult.claims.admin === true`), nunca un dato de Firestore.
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
     // Acceder a un campo ausente de un mapa (ej. `resource.data.plan` cuando
     // el doc no tiene `plan`) tira un error de evaluación en Rules, no
     // `null` — y un error de evaluación se resuelve como acceso denegado.
@@ -211,6 +219,15 @@ service cloud.firestore {
     // app), sin depender del catch-all de abajo.
     match /adminAuditLogs/{logId} {
       allow read, write: if false;
+    }
+
+    // appConfig/updateInfo: aviso de actualización configurable desde el
+    // panel admin (Fase 7, ver src/services/appUpdate.service.ts). Lectura
+    // pública — cualquier usuario, incluso sin sesión iniciada, necesita
+    // poder chequear si hay una versión nueva. Solo admin puede escribirla.
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // Catch-all: denegar todo lo que no matchea explícitamente

@@ -21,6 +21,7 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 - **Exportar datos** — genera un JSON completo (productos, clientes, movimientos de fiados, historial de cajas) compartible por Drive, WhatsApp o email. Recordatorio semanal in-app si hace más de 7 días sin exportar.
 - **Solicitud de eliminación de cuenta** — el usuario solicita el borrado desde Configuración; la solicitud queda registrada de forma no destructiva (`deletionRequest`, inmutable) y la cuenta sigue funcionando con normalidad hasta que el equipo de soporte confirme el borrado manualmente. La app no borra datos ni la cuenta de Firebase Auth por sí sola.
 - **Identidad visual propia** — paleta de marca (Azul Puerto + Terracota Almacén), tipografía Manrope, sistema de componentes reutilizables (`src/components/ui/`) y diálogos de confirmación propios en reemplazo de las alertas nativas del sistema operativo. Pensada para usuarios de 40-70 años: textos grandes, alto contraste, zonas táctiles amplias. Ver `docs/BRANDING_E_ICONOS.md` para el ícono y los assets derivados.
+- **Aviso de actualización** — la versión instalada (binario nativo, no el bundle JS) se muestra siempre en Configuración. Desde el panel admin se puede activar un aviso no bloqueante cuando hay una versión nueva disponible en la web propia (`appConfig/updateInfo` en Firestore, lectura pública / escritura solo admin). El aviso compara versiones numéricamente (no como texto), abre la web de descarga con "Actualizar ahora" y se puede posponer con "Ahora no" sin bloquear el uso de la app.
 
 ---
 
@@ -35,6 +36,7 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 | Base de datos | Cloud Firestore |
 | SDK Firebase | Firebase JS SDK 12.x (modular) |
 | PDF | expo-print + expo-sharing |
+| Versión de la app | expo-application (con fallback a `Constants.expoConfig.version` en Expo Go/dev) |
 | Persistencia local | @react-native-async-storage |
 | UI | React Native StyleSheet + sistema de componentes propio (`src/components/ui/`), sin librerías de UI externas |
 | Tipografía | Manrope (`@expo-google-fonts/manrope` + `expo-font`) |
@@ -135,21 +137,21 @@ MiNegocio/
 │   │   ├── products/        # Alta, edición y Lista de precios (Stack screen)
 │   │   ├── customers/       # Alta y detalle de cliente
 │   │   ├── categories/      # Gestión de categorías
-│   │   └── admin/           # Panel admin interno (solo custom claim admin:true) — resumen, negocios, detalle
+│   │   └── admin/           # Panel admin interno (solo custom claim admin:true) — resumen, negocios, detalle, configurar actualización
 │   ├── onboarding.tsx       # Guía inicial — se muestra una sola vez al registrarse
 │   ├── account-issue.tsx    # Pantalla de recuperación si users/businesses quedan inconsistentes
-│   └── _layout.tsx          # Root layout + guard de autenticación
+│   └── _layout.tsx          # Root layout + guard de autenticación + UpdateModal global
 ├── src/
-│   ├── components/          # Componentes de dominio (CustomerCard, ProductCard, MovementItem, OfflineBanner, EmptyState, SearchBar, PlanBanner…)
+│   ├── components/          # Componentes de dominio (CustomerCard, ProductCard, MovementItem, OfflineBanner, EmptyState, SearchBar, PlanBanner, UpdateModal…)
 │   │   └── ui/               # Design system: Button, TextField, Card, Chip, IconChip, InlineMessage, ListRow, AmountDisplay, ConfirmDialog, Toast, ScreenHeader
 │   ├── context/             # AuthContext (sesión, negocio en tiempo real, plan, admin)
 │   ├── data/                # Datos estáticos (initialAlmacenProducts — lista inicial de 90 productos)
-│   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus, usePlanStatus, useWriteGuard…
-│   ├── models/              # Tipos TypeScript (Product, Customer, CashSession, BusinessPlan, Admin*…)
-│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount, importInitialProducts, admin…)
+│   ├── hooks/               # useProducts, useCustomers, useCashSession, useNetworkStatus, usePlanStatus, useWriteGuard, useAppUpdateCheck…
+│   ├── models/              # Tipos TypeScript (Product, Customer, CashSession, BusinessPlan, Admin*, AppUpdateInfo…)
+│   ├── services/            # Firebase (products, customers, cash, exportData, deleteAccount, importInitialProducts, admin, appUpdate.service…)
 │   ├── theme/               # Design tokens: paleta, tipografía (Manrope), spacing, radios, sombras
 │   ├── types/               # Declaraciones de tipos globales (env.d.ts)
-│   ├── utils/               # Cálculo de precios, template PDF, estado de plan (planStatus.ts)
+│   ├── utils/               # Cálculo de precios, template PDF, estado de plan (planStatus.ts), comparación de versiones (versionUtils.ts) y versión instalada (appVersion.ts)
 │   └── constants/           # Categorías por defecto (10), colecciones Firestore
 ├── functions/               # Cloud Functions callable del panel admin (Node + Admin SDK, paquete npm separado)
 ├── scripts/                 # bootstrap-admin.mjs, migrate-existing-plans.mjs, generate-icons.html, tests de Rules y de Functions
@@ -213,6 +215,7 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 - Las **reglas de Firestore** (`firestore.rules`) son la capa de seguridad real: cada negocio solo puede leer y escribir sus propios datos, y solo puede escribir si su plan está activo (Pro o Trial vigente) — la UI bloquea antes por experiencia, pero el servidor rechaza igual si algo se salta la UI.
 - El campo `plan` de un negocio es inmutable desde el cliente bajo cualquier circunstancia — solo se modifica vía las Cloud Functions del panel admin, nunca escribiendo Firestore directo desde la app.
 - El custom claim `admin` (panel administrativo) solo lo asigna `scripts/bootstrap-admin.mjs` con credenciales fuera del repo — ningún cliente puede otorgárselo a sí mismo.
+- `appConfig/updateInfo` (aviso de actualización) es de lectura pública a propósito — cualquier usuario, incluso sin sesión iniciada, necesita poder chequear si hay una versión nueva. La escritura está restringida al mismo custom claim `admin` que protege el panel administrativo.
 
 ---
 
@@ -224,6 +227,10 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 ---
 
 ## Historial de versiones
+
+### v1.4.0 — 2026-07-08
+- **Aviso de actualización** — nueva colección `appConfig/updateInfo` en Firestore (independiente de `businesses/`, sin owner): lectura pública, escritura solo con el custom claim `admin`. La versión instalada (`expo-application` → `Application.nativeApplicationVersion`, con fallback a `Constants.expoConfig.version` para Expo Go/dev) se muestra siempre en Configuración. Cuando el aviso está activo y la versión instalada es menor a la publicada (comparación numérica por partes, no como texto — `src/utils/versionUtils.ts`), aparece un diálogo no bloqueante (`UpdateModal`, montado globalmente en `app/_layout.tsx`) con botón "Actualizar ahora" (abre la web de descarga, nunca descarga directo desde la app) y "Ahora no" (lo oculta hasta el próximo reinicio). Configurable desde el panel admin en una pantalla nueva (`/admin/update-config`). Ver detalle en `DECISIONES_TECNICAS.md`, Fase 17.
+- **Corrección — exportación de datos rota en SDK 54** — `expo-file-system` v19 reemplazó su API por defecto (nuevo modelo `File`/`Directory`) y movió la API anterior (`cacheDirectory`, `EncodingType`, `writeAsStringAsync`, que usa `exportBusinessData`) a `expo-file-system/legacy`. El import desactualizado rompía "Exportar mis datos (JSON)" con `Cannot read property 'UTF8' of undefined`. Corregido cambiando el import a `expo-file-system/legacy`.
 
 ### v1.3.0 — 2026-07-03
 - **Rediseño UI/UX completo** — identidad visual propia sin modificar lógica de negocio ni navegación. Paleta nueva (primary `#0F4C81` "Azul Puerto", accent `#C2542D` "Terracota Almacén"), tipografía Manrope, escala tipográfica más grande para usuarios de 40-70 años, tokens de spacing/radio/sombra unificados. Sistema de componentes nuevo en `src/components/ui/` (Button, TextField, Card, Chip, IconChip, InlineMessage, ListRow, AmountDisplay, ConfirmDialog, Toast, ScreenHeader) que reemplaza estilos duplicados en cada pantalla. Las alertas nativas del sistema operativo (`Alert.alert`) se reemplazaron por `ConfirmDialog` propio en las confirmaciones destructivas (mismos flujos de negocio, distinta UI). Ver detalle completo en `DECISIONES_TECNICAS.md`.

@@ -1046,6 +1046,107 @@ La plantilla HTML/CSS del PDF tenía su propia paleta hardcodeada (`#1D4ED8`, `#
 
 ---
 
+## Fase 17 — Aviso de actualización de versión
+
+### Por qué `appConfig/updateInfo` y no un servicio externo (Remote Config, etc.)
+
+Mi Almacén ya tiene Firestore como única fuente de datos y el panel admin ya
+escribe ahí (aunque las acciones de plan pasen por Cloud Functions). Sumar
+Firebase Remote Config u otro servicio solo para un aviso de texto hubiera
+sido una dependencia nueva para un caso de uso trivial: un documento único
+(`appConfig/updateInfo`), lectura pública, resuelve todo sin infraestructura
+adicional. No tiene owner ni pertenece a un negocio — es config de la app,
+no de una cuenta.
+
+### Por qué `isAdmin()` en las Rules usa el custom claim y no una colección `admins/{uid}`
+
+Mi Almacén **ya tenía** resuelto el concepto de admin desde la Fase 6 del
+SaaS: custom claim `admin: true` del ID token de Firebase Auth, expuesto por
+`AuthContext` (`resolveIsAdmin`) y usado para proteger la ruta `/admin` en
+`app/(app)/admin/_layout.tsx`. La implementación equivalente en otro
+proyecto hermano (PresúFácil) usa una colección `admins/{uid}` con
+`exists()` — patrón distinto porque ese proyecto no tenía custom claims de
+admin todavía. Acá se adaptó al mecanismo real ya existente
+(`request.auth.token.admin == true`) en lugar de introducir un segundo
+concepto de "admin" en paralelo al que ya protege el resto del panel.
+
+### Por qué la comparación de versiones es numérica por partes, no por string
+
+`"1.9.0" > "1.10.0"` es `true` con comparación de string (lexicográfica) y
+`false` con la real. `compareVersions()` (`src/utils/versionUtils.ts`)
+separa cada versión en partes por `.`, las convierte a número y compara
+posición por posición, tratando una parte ausente como `0` (`"1.2"` vs
+`"1.2.1"`). Es una función pura sin dependencias de Firebase ni de React
+Native — tiene test unitario propio (`versionUtils.test.ts`, corre con
+`npm run test:unit`, sin emulador).
+
+### Por qué `getInstalledAppVersion()` vive en un archivo separado de `versionUtils.ts`
+
+`Application.nativeApplicationVersion` (expo-application) y
+`Constants.expoConfig` (expo-constants) son módulos nativos: solo resuelven
+dentro del bundle de Metro/la app corriendo, no bajo el runner de tests
+puros de Node (`node --experimental-strip-types --test src/utils/*.test.ts`,
+la misma convención que ya usan `planStatus.test.ts` y
+`resolvePlanStatus.test.ts` — "sin React, sin Firebase"). Se probó primero
+todo junto en `versionUtils.ts` y el test suite rompió al importar el
+módulo completo (`ERR_MODULE_NOT_FOUND` sobre un archivo interno de
+expo-application) aunque el test nunca llamara a esa función — el fallo es
+en tiempo de import, no de ejecución. Se separó en `src/utils/appVersion.ts`
+para que `versionUtils.ts` siga siendo 100% puro y testeable, y
+`appVersion.ts` (con dependencias nativas) se use solo desde código que ya
+corre dentro de la app (el hook y la pantalla de Configuración).
+
+### Por qué el fallback a `Constants.expoConfig.version`
+
+`Application.nativeApplicationVersion` es la versión real del **binario**
+instalado — exacta en un APK/EAS Build, pero en Expo Go/dev devuelve la
+versión de Expo Go en sí (ej. `54.0.8`), no la de `app.config.ts`. En vez de
+mostrar ese valor engañoso o `null`, se usa como building block pero con
+fallback a `Constants.expoConfig?.version` cuando el nativo no está
+disponible — mismo patrón, mismo problema conocido y documentado que
+PresúFácil (ver su README, sección "Limitación conocida").
+
+### Por qué el modal reusa `ConfirmDialog` en vez de un componente nuevo
+
+Ya existe `PlanRestrictionDialog` resolviendo exactamente este problema
+(diálogo informativo de dos botones, uno de los cuales abre una URL externa
+sin cerrar el diálogo) sobre el mismo `ConfirmDialog` del design system.
+`UpdateModal` sigue el mismo patrón en vez de construir un `Modal` propio
+con estilos duplicados — la única diferencia real es el contenido del
+mensaje (incluye versión instalada y versión nueva) y que "Actualizar
+ahora" abre `downloadUrl` en lugar de un sitio fijo.
+
+### Por qué el aviso no bloquea el uso de la app
+
+`dismissable={false}` existe en la implementación de PresúFácil (el usuario
+no puede cerrar tocando afuera, solo con los botones); acá se decidió lo
+contrario a propósito — "Ahora no" y tocar fuera del diálogo lo cierran
+igual (mismo comportamiento que `ConfirmDialog` en el resto de la app, sin
+caso especial). No hay ninguna versión mínima obligatoria todavía: forzar
+una actualización sin mecanismo de "versión mínima soportada" dejaría a
+cualquier usuario sin forma de seguir usando la app si el toast de "Ahora
+no" no existiera. `dismissed` vive solo en memoria del componente — el
+aviso vuelve a evaluarse en cada apertura de la app, no queda silenciado
+para siempre con una sola vez que lo cierren.
+
+### Corrección encontrada en el camino — `expo-file-system` v19 rompía la exportación
+
+No es parte de esta fase, pero se detectó y corrigió durante las pruebas:
+`exportBusinessData` (`src/services/exportData.ts`) usaba
+`FileSystem.cacheDirectory`, `FileSystem.EncodingType.UTF8` y
+`FileSystem.writeAsStringAsync` importando `expo-file-system` a secas.
+Expo SDK 54 trajo `expo-file-system` v19, que reemplazó esa API por un
+modelo nuevo basado en clases `File`/`Directory` — la API anterior sigue
+existiendo pero se movió al subpath `expo-file-system/legacy`. El bundle
+compilaba sin avisar en tiempo de desarrollo (`FileSystem.EncodingType` es
+simplemente `undefined` en el nuevo export, no un error de import) y
+recién fallaba en tiempo de ejecución al tocar "Exportar mis datos (JSON)",
+con `Cannot read property 'UTF8' of undefined`. Corregido cambiando el
+import a `expo-file-system/legacy`, sin tocar el resto de la lógica de
+exportación.
+
+---
+
 ## SaaS — Planes, Rules, sincronización, panel admin y Cloud Functions
 
 Estas decisiones corresponden a la conversión de Mi Almacén en SaaS,

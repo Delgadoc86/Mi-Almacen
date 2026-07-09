@@ -210,3 +210,16 @@ export type Business = {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
+
+// appConfig/updateInfo — aviso de actualización configurable desde el panel
+// admin (ver src/services/appUpdate.service.ts). Documento único, ajeno a
+// businesses/ — no tiene owner, lo lee cualquier usuario de la app.
+export type AppUpdateInfo = {
+  active: boolean;
+  latestVersion: string;
+  title: string;
+  message: string;
+  downloadUrl: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+};

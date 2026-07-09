@@ -3,7 +3,7 @@ import { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'Mi Almacén',
   slug: 'mi-almacen',
-  version: '1.3.0',
+  version: '1.4.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'mialmacen',
@@ -21,7 +21,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.delgadodev.mialmacen',
-    versionCode: 5,
+    versionCode: 6,
     adaptiveIcon: {
       backgroundColor: '#E9F1FA',
       foregroundImage: './assets/android-icon-foreground.png',
