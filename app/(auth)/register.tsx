@@ -12,8 +12,9 @@ import {
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/hooks/useAuth';
+import { isConnectionError } from '@/utils/authError';
 import { theme } from '@/theme';
-import { Button, IconChip, InlineMessage, TextField } from '@/components/ui';
+import { Button, ConfirmDialog, IconChip, InlineMessage, TextField } from '@/components/ui';
 
 const ERROR_MAP: Record<string, string> = {
   'auth/email-already-in-use': 'Ya existe una cuenta con ese email.',
@@ -37,6 +38,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [generalError, setGeneralError] = useState('');
+  const [connectionErrorRetry, setConnectionErrorRetry] = useState<(() => void) | null>(null);
 
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -56,7 +58,11 @@ export default function RegisterScreen() {
       await register(email.trim().toLowerCase(), password, businessName.trim());
       // RootGuard detects emailVerified === false and redirects to /verify-email
     } catch (e) {
-      setGeneralError(mapAuthError(e));
+      if (isConnectionError(e)) {
+        setConnectionErrorRetry(() => handleRegister);
+      } else {
+        setGeneralError(mapAuthError(e));
+      }
     } finally {
       setLoading(false);
     }
@@ -137,6 +143,20 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ConfirmDialog
+        visible={connectionErrorRetry !== null}
+        title="No pudimos conectar"
+        message="Revisá tus datos móviles o WiFi e intentá de nuevo."
+        confirmLabel="Reintentar"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          const retry = connectionErrorRetry;
+          setConnectionErrorRetry(null);
+          retry?.();
+        }}
+        onCancel={() => setConnectionErrorRetry(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

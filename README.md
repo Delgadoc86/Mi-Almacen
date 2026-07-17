@@ -17,7 +17,7 @@ su caja diaria, los fiados de clientes y su catálogo de productos.
 - **Categorías** — 10 categorías del sistema (Almacén, Bebidas, Lácteos, Carnes, Fiambrería, Verdulería, Limpieza, Higiene, Panadería, Otros) + categorías personalizadas
 - **Configuración** — nombre del comercio, margen por defecto, redondeo por defecto, categoría por defecto
 - **Onboarding inicial** — al registrarse, el usuario ve una guía de 4 pasos (abrir caja, crear cliente fiado, agregar producto, controlar lista de precios). Se muestra una sola vez. Desde Configuración se puede volver a ver sin que aparezca automáticamente.
-- **Offline** — banner de sin conexión automático. Firebase encola escrituras simples durante caídas momentáneas y sincroniza al reconectar. Transacciones financieras fallan conscientemente sin red.
+- **Offline** — con la app abierta, perder la conexión muestra un banner fijo ("Sin conexión · Solo lectura") en toda el área autenticada: los datos ya cargados se siguen viendo, pero cobrar, fiar, editar o borrar queda bloqueado hasta reconectar (sin cola ni sincronización posterior — no se promete nada que la app no hace). Si la app se abre sin conexión y no puede cargar datos, se muestra una pantalla de reintento en vez de un spinner infinito. Login, Registro y Recuperar contraseña muestran "No pudimos conectar" con botón Reintentar si Firebase Auth no responde, sin perder lo ya escrito en el formulario.
 - **Exportar datos** — genera un JSON completo (productos, clientes, movimientos de fiados, historial de cajas) compartible por Drive, WhatsApp o email. Recordatorio semanal in-app si hace más de 7 días sin exportar.
 - **Solicitud de eliminación de cuenta** — el usuario solicita el borrado desde Configuración; la solicitud queda registrada de forma no destructiva (`deletionRequest`, inmutable) y la cuenta sigue funcionando con normalidad hasta que el equipo de soporte confirme el borrado manualmente. La app no borra datos ni la cuenta de Firebase Auth por sí sola.
 - **Identidad visual propia** — paleta de marca (Azul Puerto + Terracota Almacén), tipografía Manrope, sistema de componentes reutilizables (`src/components/ui/`) y diálogos de confirmación propios en reemplazo de las alertas nativas del sistema operativo. Pensada para usuarios de 40-70 años: textos grandes, alto contraste, zonas táctiles amplias. Ver `docs/BRANDING_E_ICONOS.md` para el ícono y los assets derivados.
@@ -120,6 +120,15 @@ trial, pasar a solo lectura, suspender o reactivar cualquier negocio, con
 motivo obligatorio y auditoría de cada acción. El backend son 5 Cloud
 Functions callable, ya desplegadas.
 
+El mismo panel incluye una **libreta de cobros** (`adminBilling/{businessId}`,
+3 Cloud Functions adicionales) — último pago, próximo cobro esperado,
+método, monto y notas internas, para administrar el cobro manual a medida
+que haya clientes pagos. Es puramente administrativo: no participa en
+`canWrite` ni en Firestore Rules, no corta ni activa nada automáticamente,
+y el cliente normal no puede leer ni escribir esa colección bajo ninguna
+circunstancia. El cobro sigue siendo 100% manual — no hay Mercado Pago,
+Google Play Billing ni ningún gateway integrado.
+
 Detalle completo de arquitectura, decisiones y qué falta: `docs/SAAS_ROADMAP.md`.
 Guía de operación/deploy: `docs/OPERACION_ADMIN_Y_DESPLIEGUE.md`.
 
@@ -153,7 +162,7 @@ MiNegocio/
 │   ├── types/               # Declaraciones de tipos globales (env.d.ts)
 │   ├── utils/               # Cálculo de precios, template PDF, estado de plan (planStatus.ts), comparación de versiones (versionUtils.ts) y versión instalada (appVersion.ts)
 │   └── constants/           # Categorías por defecto (10), colecciones Firestore
-├── functions/               # Cloud Functions callable del panel admin (Node + Admin SDK, paquete npm separado)
+├── functions/               # Cloud Functions callable del panel admin: plan (5) + libreta de cobros/adminBilling (3) (Node + Admin SDK, paquete npm separado)
 ├── scripts/                 # bootstrap-admin.mjs, migrate-existing-plans.mjs, generate-icons.html, tests de Rules y de Functions
 ├── docs/                    # Documentación profunda: SaaS, operación/deploy, branding
 ├── assets/                  # Íconos, splash e ícono maestro (icon.svg) — ver docs/BRANDING_E_ICONOS.md
@@ -227,6 +236,13 @@ El APK resultante se descarga desde el dashboard de EAS y se instala directament
 ---
 
 ## Historial de versiones
+
+### v1.5.0 — 2026-07-16
+- **Manejo de conexión en Login/Registro/Recuperar contraseña** — Firebase Auth no tiene timeout propio; una conexión colgada dejaba el botón girando para siempre. Ahora, tras 9s sin respuesta (o `auth/network-request-failed`), aparece "No pudimos conectar" con botón Reintentar (repite el mismo intento sin perder lo ya escrito) y Cancelar. Ver `ROADMAP.md`, Fase 18, y `DECISIONES_TECNICAS.md`.
+- **`OfflineBanner` global** — se movió de `(tabs)/_layout.tsx` a `(app)/_layout.tsx`: un solo montaje que cubre tabs y todas las pantallas internas (Caja, Fiados, Productos, Categorías), no solo los 5 tabs principales. No aparece en Login/Registro.
+- **"Solicitar eliminación de cuenta" con guard propio** — nuevo `useConnectionGuard` (exige conexión confirmada, deliberadamente ciego al estado del plan) en vez de quedar sin ninguna protección; sigue disponible con trial vencido, solo lectura o suspendido.
+- **Libreta de cobros administrativa** (`adminBilling/{businessId}`) — último pago, próximo cobro esperado, método, monto y notas internas, gestionada solo desde el panel admin vía 3 Cloud Functions nuevas. Puramente administrativo: no participa en `canWrite` ni en Rules, no activa ni corta nada automáticamente. Ver "Estado actual (SaaS)" arriba y `docs/SAAS_ROADMAP.md`, Fase 8. **Pendiente de deploy.**
+- **Limpieza y rediseño del panel admin** (solo UI) — colores corregidos (`readonly` de rojo a ámbar, coherente con "trial vencido"), filas redundantes eliminadas del detalle de negocio, dashboard reorganizado como desglose verificable (las categorías de plan suman el total, en vez de una grilla plana de números sueltos), aviso de "Atención" cuando hay algo que requiere acción, y corrección de un bug de layout real en la lista de negocios (una `FlatList` sin `style` reclamaba espacio vertical de más, dejando un hueco en blanco). Cero cambios de lógica de plan o billing. Ver `docs/SAAS_ROADMAP.md`, Fase 9.
 
 ### v1.4.0 — 2026-07-08
 - **Aviso de actualización** — nueva colección `appConfig/updateInfo` en Firestore (independiente de `businesses/`, sin owner): lectura pública, escritura solo con el custom claim `admin`. La versión instalada (`expo-application` → `Application.nativeApplicationVersion`, con fallback a `Constants.expoConfig.version` para Expo Go/dev) se muestra siempre en Configuración. Cuando el aviso está activo y la versión instalada es menor a la publicada (comparación numérica por partes, no como texto — `src/utils/versionUtils.ts`), aparece un diálogo no bloqueante (`UpdateModal`, montado globalmente en `app/_layout.tsx`) con botón "Actualizar ahora" (abre la web de descarga, nunca descarga directo desde la app) y "Ahora no" (lo oculta hasta el próximo reinicio). Configurable desde el panel admin en una pantalla nueva (`/admin/update-config`). Ver detalle en `DECISIONES_TECNICAS.md`, Fase 17.

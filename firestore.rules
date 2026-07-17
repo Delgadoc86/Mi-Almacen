@@ -221,6 +221,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Libreta de cobros — administración comercial interna (billing), no
+    // acceso. Mismo criterio y mismo motivo que adminAuditLogs arriba: solo
+    // la escriben/leen las Cloud Functions callable (adminGetBillingDetail/
+    // adminRecordPayment/adminUpdateBillingNotes) con el Admin SDK, que
+    // ignora estas reglas por completo. Esta regla es redundante con el
+    // catch-all de abajo (nada matchea `adminBilling` ahí tampoco) — se deja
+    // explícita a propósito, por claridad y para no depender del catch-all
+    // si algún día se agrega una regla más permisiva por encima de él.
+    match /adminBilling/{document=**} {
+      allow read, write: if false;
+    }
+
     // appConfig/updateInfo: aviso de actualización configurable desde el
     // panel admin (Fase 7, ver src/services/appUpdate.service.ts). Lectura
     // pública — cualquier usuario, incluso sin sesión iniciada, necesita

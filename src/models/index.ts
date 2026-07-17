@@ -144,6 +144,11 @@ export type AdminDashboardCounts = {
   noPlan: number;
   pendingDeletionRequests: number;
   totalBusinesses: number;
+  // Derivados de adminBilling, no de `plan` — puramente informativos para
+  // priorizar seguimiento de cobro, sin relación con acceso/canWrite.
+  billingDueThisWeek: number;
+  billingOverdue: number;
+  billingNoData: number;
 };
 
 export type AdminBusinessListItem = {
@@ -172,10 +177,14 @@ export type AdminAuditLogEntry = {
   id: string;
   actorUid: string;
   businessId: string;
-  action: AdminChangePlanAction;
+  action: AdminAuditAction;
   reason: string | null;
   previousPlan: AdminSerializedPlan | null;
   nextPlan: AdminSerializedPlan | null;
+  // Presentes únicamente en entradas de acciones de billing (record_payment,
+  // update_billing_notes) — null en entradas de cambio de plan.
+  previousBilling: AdminBillingSummary | null;
+  nextBilling: AdminBillingSummary | null;
   createdAt: string | null;
 };
 
@@ -190,6 +199,57 @@ export type AdminBusinessDetail = {
   deletionRequestedAt: string | null;
   auditLog: AdminAuditLogEntry[];
 };
+
+// ── Libreta de cobros — administración comercial interna (adminBilling) ──
+// Vive en adminBilling/{businessId} (colección separada de `businesses`,
+// nunca legible/escribible por el cliente — ver firestore.rules). Es
+// puramente informativo para el admin: no participa en `canWrite` ni en
+// ninguna decisión de acceso. `plan` sigue siendo la única fuente de
+// verdad para eso. Fechas ya vienen como ISO string (ver AdminSerializedPlan,
+// mismo criterio: cruzan el protocolo callable).
+export type AdminBillingMethod = 'transferencia' | 'mercado_pago_link' | 'efectivo' | 'otro';
+
+export type AdminBillingStatus = 'no-data' | 'ok' | 'due-soon' | 'overdue';
+
+export type AdminBillingSummary = {
+  businessId: string;
+  lastPaymentAt: string | null;
+  nextPaymentDueAt: string | null;
+  paymentMethod: AdminBillingMethod | null;
+  lastAmount: number | null;
+  currency: 'ARS' | null;
+  notes: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+};
+
+export type AdminBillingPayment = {
+  id: string;
+  businessId: string;
+  amount: number;
+  currency: 'ARS';
+  method: AdminBillingMethod;
+  paidAt: string | null;
+  periodDays: 30 | 90 | 365 | null;
+  nextPaymentDueAt: string | null;
+  note: string | null;
+  createdAt: string | null;
+  createdBy: string;
+};
+
+export type AdminBillingDetail = {
+  businessId: string;
+  businessName: string;
+  billing: AdminBillingSummary | null;
+  payments: AdminBillingPayment[];
+};
+
+export type AdminBillingAction = 'record_payment' | 'update_billing_notes';
+
+// Acción registrada en adminAuditLogs — puede ser un cambio de plan (acceso)
+// o una acción de billing (administración comercial). Mismo documento/
+// colección, campos previous/next distintos según cuál de los dos sea.
+export type AdminAuditAction = AdminChangePlanAction | AdminBillingAction;
 
 export type Business = {
   id: string;

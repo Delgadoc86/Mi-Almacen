@@ -7,6 +7,9 @@ import type {
   AdminDashboardCounts,
   AdminAuditLogEntry,
   AdminSerializedPlan,
+  AdminBillingDetail,
+  AdminBillingSummary,
+  AdminBillingMethod,
 } from '@/models';
 
 // Capa fina sobre las Cloud Functions callable de functions/index.js (Fase 6).
@@ -66,4 +69,46 @@ export async function listAdminAuditLogs(params: {
   );
   const res = await fn(params);
   return res.data.logs;
+}
+
+// ── Libreta de cobros (adminBilling) — administración comercial interna,
+// nunca acceso. El cliente normal no puede leer/escribir esta colección
+// (ver firestore.rules); solo llega acá vía estas Cloud Functions callable,
+// igual que el resto de la capa admin de arriba.
+
+export async function getAdminBillingDetail(businessId: string): Promise<AdminBillingDetail> {
+  const fn = httpsCallable<{ businessId: string }, AdminBillingDetail>(
+    functions,
+    'adminGetBillingDetail',
+  );
+  const res = await fn({ businessId });
+  return res.data;
+}
+
+export async function recordAdminPayment(params: {
+  businessId: string;
+  amount: number;
+  method: AdminBillingMethod;
+  paidAt?: string;
+  periodDays?: 30 | 90 | 365;
+  note?: string;
+}): Promise<{ success: boolean; billing: AdminBillingSummary | null }> {
+  const fn = httpsCallable<typeof params, { success: boolean; billing: AdminBillingSummary | null }>(
+    functions,
+    'adminRecordPayment',
+  );
+  const res = await fn(params);
+  return res.data;
+}
+
+export async function updateAdminBillingNotes(params: {
+  businessId: string;
+  notes: string;
+}): Promise<{ success: boolean; billing: AdminBillingSummary | null }> {
+  const fn = httpsCallable<typeof params, { success: boolean; billing: AdminBillingSummary | null }>(
+    functions,
+    'adminUpdateBillingNotes',
+  );
+  const res = await fn(params);
+  return res.data;
 }

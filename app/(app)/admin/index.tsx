@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, InlineMessage, ListRow } from '@/components/ui';
+import type { Tone } from '@/components/ui';
 import { theme } from '@/theme';
 import { getAdminDashboard } from '@/services/admin';
 import type { AdminDashboardCounts } from '@/models';
@@ -10,25 +11,31 @@ import type { AdminDashboardCounts } from '@/models';
 type StatDef = {
   key: keyof AdminDashboardCounts;
   label: string;
-  tone: 'primary' | 'success' | 'warning' | 'danger' | 'muted';
+  tone: Tone;
 };
 
-const STATS: StatDef[] = [
-  { key: 'trialActive', label: 'Trials activos', tone: 'primary' },
-  { key: 'trialExpired', label: 'Trials vencidos', tone: 'warning' },
-  { key: 'pro', label: 'Pro activos', tone: 'success' },
+// Partición completa de `businesses` — cada negocio cae en exactamente uno
+// de estos 6 estados, así que las filas siempre suman el total de arriba.
+// `pendingDeletionRequests` queda afuera a propósito: no es excluyente con
+// los demás (un negocio Pro puede tener una solicitud de eliminación
+// pendiente a la vez), se muestra solo en "Atención" si corresponde.
+const PLAN_STATS: StatDef[] = [
+  { key: 'pro', label: 'Pro', tone: 'success' },
+  { key: 'trialActive', label: 'Trial activo', tone: 'primary' },
+  { key: 'trialExpired', label: 'Trial vencido', tone: 'warning' },
   { key: 'readonly', label: 'Solo lectura', tone: 'warning' },
-  { key: 'suspended', label: 'Suspendidos', tone: 'danger' },
-  { key: 'pendingDeletionRequests', label: 'Solicitudes de eliminación', tone: 'muted' },
+  { key: 'suspended', label: 'Suspendido', tone: 'danger' },
+  { key: 'noPlan', label: 'Sin plan', tone: 'danger' },
 ];
 
-const COLOR_BY_TONE: Record<StatDef['tone'], string> = {
-  primary: theme.colors.primary,
-  success: theme.colors.success,
-  warning: theme.colors.warning,
-  danger: theme.colors.error,
-  muted: theme.colors.textSecondary,
-};
+// Derivados de adminBilling (administración comercial), no de `plan` — no
+// suman al total de negocios (un negocio "al día" con vencimiento lejano no
+// entra en ninguna de las tres), separados en su propia tarjeta.
+const BILLING_STATS: StatDef[] = [
+  { key: 'billingOverdue', label: 'Vencidos', tone: 'danger' },
+  { key: 'billingDueThisWeek', label: 'Esta semana', tone: 'warning' },
+  { key: 'billingNoData', label: 'Sin datos', tone: 'muted' },
+];
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
@@ -57,6 +64,22 @@ export default function AdminDashboardScreen() {
     setRefreshing(false);
   }
 
+  const attentionParts: string[] = [];
+  if (counts) {
+    if (counts.billingOverdue > 0) {
+      attentionParts.push(`${counts.billingOverdue} ${counts.billingOverdue === 1 ? 'cobro vencido' : 'cobros vencidos'}`);
+    }
+    if (counts.trialExpired > 0) {
+      attentionParts.push(`${counts.trialExpired} ${counts.trialExpired === 1 ? 'trial vencido' : 'trials vencidos'}`);
+    }
+    if (counts.suspended > 0) {
+      attentionParts.push(`${counts.suspended} ${counts.suspended === 1 ? 'suspendido' : 'suspendidos'}`);
+    }
+    if (counts.pendingDeletionRequests > 0) {
+      attentionParts.push(`${counts.pendingDeletionRequests} ${counts.pendingDeletionRequests === 1 ? 'solicitud de eliminación' : 'solicitudes de eliminación'}`);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['left', 'right', 'bottom']}>
       <ScrollView
@@ -74,17 +97,44 @@ export default function AdminDashboardScreen() {
           <InlineMessage variant="error" text={error} />
         ) : counts ? (
           <>
+            {attentionParts.length > 0 && (
+              <InlineMessage
+                variant="warning"
+                icon="alert-circle-outline"
+                text={`Atención: ${attentionParts.join(' · ')}.`}
+                style={styles.attentionBox}
+              />
+            )}
+
             <Text style={styles.totalLabel}>{counts.totalBusinesses} negocios en total</Text>
-            <View style={styles.grid}>
-              {STATS.map((stat) => (
-                <Card key={stat.key} style={styles.statCard}>
-                  <Text style={[styles.statValue, { color: COLOR_BY_TONE[stat.tone] }]}>
-                    {counts[stat.key]}
-                  </Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
-                </Card>
+            <Card style={styles.summaryCard}>
+              {PLAN_STATS.map((stat, i) => (
+                <View key={stat.key}>
+                  {i > 0 && <View style={styles.rowDivider} />}
+                  <ListRow
+                    title={stat.label}
+                    value={String(counts[stat.key] ?? 0)}
+                    valueTone={stat.tone}
+                    showChevron={false}
+                  />
+                </View>
               ))}
-            </View>
+            </Card>
+
+            <Text style={styles.sectionLabel}>COBRO</Text>
+            <Card style={styles.summaryCard}>
+              {BILLING_STATS.map((stat, i) => (
+                <View key={stat.key}>
+                  {i > 0 && <View style={styles.rowDivider} />}
+                  <ListRow
+                    title={stat.label}
+                    value={String(counts[stat.key] ?? 0)}
+                    valueTone={stat.tone}
+                    showChevron={false}
+                  />
+                </View>
+              ))}
+            </Card>
           </>
         ) : null}
 
@@ -122,33 +172,22 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   loader: { marginTop: 40 },
+  attentionBox: { marginBottom: theme.spacing.lg },
   totalLabel: {
     fontFamily: theme.fontFamily.bold,
     fontSize: theme.font.body,
     color: theme.colors.textSecondary,
     marginBottom: theme.spacing.md,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.xxl,
+  summaryCard: {
+    padding: 0,
+    overflow: 'hidden',
+    marginBottom: theme.spacing.xl,
   },
-  statCard: {
-    width: '47%',
-    padding: theme.spacing.lg,
-    alignItems: 'flex-start',
-  },
-  statValue: {
-    fontFamily: theme.fontFamily.extrabold,
-    fontSize: theme.font.h1,
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontFamily: theme.fontFamily.semibold,
-    fontSize: theme.font.caption,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
+  rowDivider: {
+    height: 1,
+    backgroundColor: theme.colors.divider,
+    marginHorizontal: theme.spacing.lg,
   },
   sectionLabel: {
     fontFamily: theme.fontFamily.bold,

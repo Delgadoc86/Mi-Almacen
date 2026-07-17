@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { OfflineBanner } from '@/components/OfflineBanner';
 import { theme } from '@/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -19,8 +18,6 @@ const TAB_ICONS: Record<string, [IconName, IconName]> = {
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1 }}>
-      <OfflineBanner />
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -52,7 +49,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="settings" options={{ title: 'Config' }} />
       <Tabs.Screen name="pdf" options={{ href: null }} />
     </Tabs>
-    </View>
   );
 }
 

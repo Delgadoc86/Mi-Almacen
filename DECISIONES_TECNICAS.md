@@ -1266,6 +1266,58 @@ existe todavía un procesamiento automatizado (Cloud Function programada)
 para resolver estas solicitudes — es un pendiente real, no una decisión
 final.
 
+### Por qué Login/Registro/Recuperar contraseña tienen su propio timeout
+
+`AuthContext` ya envolvía la carga inicial del perfil (`getUserProfile`/
+`resolveIsAdmin`) en `withTimeout` porque Firebase Auth no tiene ningún
+timeout propio en sus llamadas de red — sin conexión y sin nada en cache,
+la promesa puede no resolver nunca. El mismo problema existía, sin
+resolver, en `login()`, `register()` y `forgotPassword()`: si la red se
+caía a mitad de `signInWithEmailAndPassword`, el botón se quedaba con el
+círculo de carga girando para siempre, sin ningún mensaje. Se aplicó el
+mismo `withTimeout` (9s) a las tres llamadas, y un helper nuevo
+(`src/utils/authError.ts`, `isConnectionError`) distingue ese timeout —o
+`auth/network-request-failed`— de un error real de credenciales, para
+mostrar "No pudimos conectar" (con botón Reintentar, que repite el mismo
+intento sin pedir de nuevo los datos) en vez de un mensaje técnico o,
+peor, ningún mensaje.
+
+### Por qué OfflineBanner se movió a `(app)/_layout.tsx`
+
+Vivía en `(tabs)/_layout.tsx`, así que solo aparecía en los 5 tabs
+principales — un comerciante en medio de un formulario (Nuevo producto,
+Cobrar fiado, Cerrar caja) perdía la conexión y no veía ningún aviso,
+aunque la escritura ya estuviera bloqueada por `useWriteGuard`. Se movió
+al `Stack` raíz de `(app)`, que envuelve tabs y todas las pantallas
+internas por igual — un solo montaje, sin duplicar el banner en tabs. No
+aparece en `(auth)` (login/registro) porque es una rama de rutas distinta,
+fuera de ese `Stack`.
+
+### Por qué "Solicitar eliminación de cuenta" tiene su propio guard de conexión
+
+`useWriteGuard` bloquea por estado de **plan** (trial vencido, solo
+lectura, suspendido) — pero la eliminación de cuenta tiene que seguir
+disponible justo en esos estados, es la vía de salida para una cuenta que
+ya no puede operar. Envolverla con `useWriteGuard` la habría bloqueado por
+el motivo equivocado. `useConnectionGuard` (`src/hooks/useConnectionGuard.ts`)
+es un guard aparte, deliberadamente ciego al plan: solo exige que el
+listener de negocio haya confirmado su estado con el servidor
+(`businessSyncStatus` en `synced`/`missing`), porque sigue siendo una
+escritura real a Firestore y necesita conexión de verdad — pero nunca
+mira `plan.status`.
+
+### Por qué se corrigieron los colores del panel admin (readonly ≠ suspended)
+
+El badge de "Solo lectura" se pintaba igual de rojo que "Suspendido" en
+todo el panel admin, aunque son estados muy distintos: `readonly` es el
+resultado esperable de un trial vencido sin pago (automático, no punitivo),
+`suspended` es una decisión manual y excepcional del admin. Pintarlos
+igual le resta información al admin de un vistazo. Se pasó `readonly` a
+ámbar (mismo criterio que "trial vencido" y "trial por vencer") en el
+detalle de negocio y en la lista, reservando rojo únicamente para
+`suspended` y `no-plan` (cuenta rota). Es un cambio puramente visual — no
+toca `getPlanStatus`, `isPlanActiveValue` (Rules) ni ningún `kind`.
+
 ### Identidad visual y branding
 
 La decisión de adoptar una identidad propia ("La Libreta", paleta Azul

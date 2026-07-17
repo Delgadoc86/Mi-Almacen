@@ -25,6 +25,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   doc,
+  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -406,6 +407,72 @@ test('nadie puede escribir adminAuditLogs directamente desde un cliente', async 
       action: 'activate_pro',
       reason: null,
       createdAt: serverTimestamp(),
+    }),
+  );
+});
+
+// ── Libreta de cobros: adminBilling es inaccesible para cualquier cliente ──
+//
+// Mismo criterio que adminAuditLogs arriba: las Cloud Functions callable
+// (adminGetBillingDetail/adminRecordPayment/adminUpdateBillingNotes) usan el
+// Admin SDK, que ignora estas reglas por completo — lo que se prueba acá es
+// que NADIE, ni siquiera el propio dueño del negocio, puede leer o escribir
+// esta colección (ni el documento resumen ni la subcolección de pagos)
+// directamente desde un cliente Firestore.
+
+test('nadie puede leer adminBilling directamente desde un cliente', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'adminBilling', OWNER_UID), {
+      businessId: OWNER_UID,
+      lastPaymentAt: serverTimestamp(),
+      nextPaymentDueAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      paymentMethod: 'transferencia',
+      lastAmount: 5000,
+      currency: 'ARS',
+      updatedAt: serverTimestamp(),
+      updatedBy: 'admin-uid',
+    });
+  });
+  const db = ownerDb();
+  await assertFails(getDoc(doc(db, 'adminBilling', OWNER_UID)));
+});
+
+test('nadie puede escribir adminBilling directamente desde un cliente', async () => {
+  const db = ownerDb();
+  await assertFails(
+    setDoc(doc(db, 'adminBilling', OWNER_UID), {
+      businessId: OWNER_UID,
+      lastAmount: 999999,
+      currency: 'ARS',
+      updatedAt: serverTimestamp(),
+      updatedBy: OWNER_UID,
+    }),
+  );
+});
+
+test('nadie puede leer ni escribir la subcolección de pagos de adminBilling directamente', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'adminBilling', OWNER_UID, 'payments', 'pay-1'), {
+      businessId: OWNER_UID,
+      amount: 5000,
+      currency: 'ARS',
+      method: 'transferencia',
+      paidAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      createdBy: 'admin-uid',
+    });
+  });
+  const db = ownerDb();
+  await assertFails(getDoc(doc(db, 'adminBilling', OWNER_UID, 'payments', 'pay-1')));
+  await assertFails(
+    setDoc(doc(db, 'adminBilling', OWNER_UID, 'payments', 'pay-2'), {
+      businessId: OWNER_UID,
+      amount: 1,
+      currency: 'ARS',
+      method: 'otro',
+      paidAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      createdBy: OWNER_UID,
     }),
   );
 });

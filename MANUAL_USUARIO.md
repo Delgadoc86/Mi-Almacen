@@ -49,6 +49,8 @@ La aplicación creará automáticamente el perfil del negocio y las 10 categorí
 
 Si ya tiene una cuenta, ingrese su correo y contraseña en la pantalla de inicio.
 
+Si no hay conexión a internet (o el servidor tarda demasiado en responder), aparece un mensaje "No pudimos conectar" con un botón **Reintentar** — no pierde el correo ni la contraseña que ya escribió. Lo mismo pasa al registrarse o al recuperar la contraseña.
+
 ### Cerrar sesión
 
 Ir a **Configuración** → sección **Cuenta** → tocar **Cerrar sesión**.

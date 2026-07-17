@@ -1,7 +1,7 @@
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 import { theme } from '@/theme';
 
-type Size = 'md' | 'lg' | 'hero';
+type Size = 'sm' | 'md' | 'lg' | 'hero';
 type Tone = 'default' | 'primary' | 'success' | 'danger' | 'muted';
 
 type Props = {
@@ -13,6 +13,8 @@ type Props = {
 };
 
 const FONT_SIZE_BY_SIZE: Record<Size, number> = {
+  // Para filas compactas (ej. panel admin) — el resto de la app usa md/lg/hero.
+  sm: theme.font.bodyLg,
   md: theme.font.h1,
   lg: theme.font.display,
   hero: theme.font.displayLg,

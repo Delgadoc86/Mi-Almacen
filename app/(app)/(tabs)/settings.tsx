@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
 import { useWriteGuard } from '@/hooks/useWriteGuard';
+import { useConnectionGuard } from '@/hooks/useConnectionGuard';
 import { updateBusiness, updateBusinessPreferences } from '@/services/userProfile';
 import { exportBusinessData } from '@/services/exportData';
 import { requestAccountDeletion } from '@/services/deleteAccount';
@@ -23,6 +24,12 @@ import type { Timestamp } from 'firebase/firestore';
 
 const LAST_EXPORT_KEY = 'lastExportAt';
 const EXPORT_REMINDER_DAYS = 7;
+
+// Independiente del plan a propósito: la solicitud de eliminación debe poder
+// enviarse con trial vencido, readonly o suspended — solo requiere que haya
+// conexión real para escribir en Firestore (ver useConnectionGuard).
+const DELETE_ACCOUNT_OFFLINE_MESSAGE =
+  'Necesitás conexión a Internet para solicitar la eliminación de tu cuenta.';
 
 function formatLastLogin(ts?: Timestamp): string | null {
   if (!ts || typeof ts.toDate !== 'function') return null;
@@ -46,6 +53,7 @@ export default function SettingsScreen() {
   const { business, userProfile, isAdmin, logout, refreshBusiness } = useAuth();
   const { categories } = useCategories();
   const { requireWrite, restrictionMessage, dismissRestriction } = useWriteGuard();
+  const { requireOnline, restrictionMessage: connectionRestrictionMessage, dismissRestriction: dismissConnectionRestriction } = useConnectionGuard();
   const planStatus = usePlanStatus();
 
   const [businessName, setBusinessName] = useState('');
@@ -393,7 +401,7 @@ export default function SettingsScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.deleteBtn, requestingDeletion && styles.saveBtnDisabled]}
-                onPress={() => setConfirmDeletionVisible(true)}
+                onPress={() => requireOnline(() => setConfirmDeletionVisible(true), DELETE_ACCOUNT_OFFLINE_MESSAGE)}
                 disabled={requestingDeletion}
                 activeOpacity={0.8}
               >
@@ -441,7 +449,7 @@ export default function SettingsScreen() {
         confirmLabel="Enviar solicitud"
         variant="destructive"
         loading={requestingDeletion}
-        onConfirm={handleRequestDeletion}
+        onConfirm={() => requireOnline(handleRequestDeletion, DELETE_ACCOUNT_OFFLINE_MESSAGE)}
         onCancel={() => setConfirmDeletionVisible(false)}
       />
 
@@ -451,6 +459,13 @@ export default function SettingsScreen() {
         onHide={() => setToastVisible(false)}
       />
       <PlanRestrictionDialog message={restrictionMessage} onDismiss={dismissRestriction} />
+      <ConfirmDialog
+        visible={Boolean(connectionRestrictionMessage)}
+        title="Sin conexión"
+        message={connectionRestrictionMessage ?? ''}
+        confirmLabel="Entendido"
+        onConfirm={dismissConnectionRestriction}
+      />
     </SafeAreaView>
   );
 }

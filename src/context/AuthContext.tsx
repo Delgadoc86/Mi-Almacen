@@ -24,6 +24,13 @@ import type { UserProfile, Business } from '@/models';
 
 const BIOMETRIC_EMAIL_KEY = 'biometric_user_email';
 const INITIAL_LOAD_TIMEOUT_MS = 9000;
+// Acciones interactivas de Firebase Auth (signIn, createUser,
+// sendPasswordReset) tampoco tienen timeout propio — si el dispositivo se
+// queda sin señal a mitad de la request, la promesa puede no resolver
+// nunca y el botón de Login/Registro/Recuperar queda con el loading
+// pegado. Mismo criterio que INITIAL_LOAD_TIMEOUT_MS, separado porque es
+// una acción disparada por el usuario, no una carga de arranque.
+const AUTH_ACTION_TIMEOUT_MS = 9000;
 
 // getUserProfile()/resolveIsAdmin() son lecturas puntuales (getDoc /
 // getIdTokenResult), no listeners — sin conexión y sin nada en cache, el SDK
@@ -223,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const accountInconsistent = businessConfirmed && Boolean(state.userProfile) !== Boolean(state.business);
 
   async function login(email: string, password: string): Promise<void> {
-    const fbUser = await loginWithEmail(email, password);
+    const fbUser = await withTimeout(loginWithEmail(email, password), AUTH_ACTION_TIMEOUT_MS);
     await repairIncompleteRegistration(fbUser.uid, fbUser.email ?? email);
     // Non-critical: update lastLoginAt and save email for biometric future use
     Promise.all([
@@ -240,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<void> {
     isRegistering.current = true;
     try {
-      const fbUser = await registerWithEmail(email, password);
+      const fbUser = await withTimeout(registerWithEmail(email, password), AUTH_ACTION_TIMEOUT_MS);
       await createUserAndBusiness(fbUser.uid, fbUser.email ?? email, businessName);
 
       const [profile, isAdmin] = await Promise.all([getUserProfile(fbUser.uid), resolveIsAdmin(fbUser)]);
@@ -268,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function forgotPassword(email: string): Promise<void> {
-    await sendPasswordReset(email);
+    await withTimeout(sendPasswordReset(email), AUTH_ACTION_TIMEOUT_MS);
   }
 
   async function recheckEmailVerified(): Promise<boolean> {

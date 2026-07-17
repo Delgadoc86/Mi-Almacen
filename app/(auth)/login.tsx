@@ -14,8 +14,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
+import { isConnectionError } from '@/utils/authError';
 import { theme } from '@/theme';
-import { Button, IconChip, InlineMessage, TextField } from '@/components/ui';
+import { Button, ConfirmDialog, IconChip, InlineMessage, TextField } from '@/components/ui';
 
 const BIOMETRIC_EMAIL_KEY = 'biometric_user_email';
 
@@ -53,6 +54,11 @@ export default function LoginScreen() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
 
+  // Comparte el diálogo "No pudimos conectar" entre Login y Recuperar
+  // contraseña (misma pantalla): guarda qué acción reintentar, no un
+  // booleano por flujo.
+  const [connectionErrorRetry, setConnectionErrorRetry] = useState<(() => void) | null>(null);
+
   const passwordRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -78,9 +84,12 @@ export default function LoginScreen() {
     try {
       await login(email.trim().toLowerCase(), password);
     } catch (e) {
-      const msg = mapAuthError(e);
-      setGeneralError(msg);
-      setFailedAttempts((n) => n + 1);
+      if (isConnectionError(e)) {
+        setConnectionErrorRetry(() => handleLogin);
+      } else {
+        setGeneralError(mapAuthError(e));
+        setFailedAttempts((n) => n + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -119,13 +128,17 @@ export default function LoginScreen() {
       await forgotPassword(trimmed);
       setForgotSuccess(true);
     } catch (e) {
-      const code = (e as { code?: string })?.code ?? '';
-      if (code === 'auth/user-not-found') {
-        setForgotError('No existe una cuenta con ese email.');
-      } else if (code === 'auth/invalid-email') {
-        setForgotError('Email inválido.');
+      if (isConnectionError(e)) {
+        setConnectionErrorRetry(() => handleForgotPassword);
       } else {
-        setForgotError('No se pudo enviar el correo. Intentá de nuevo.');
+        const code = (e as { code?: string })?.code ?? '';
+        if (code === 'auth/user-not-found') {
+          setForgotError('No existe una cuenta con ese email.');
+        } else if (code === 'auth/invalid-email') {
+          setForgotError('Email inválido.');
+        } else {
+          setForgotError('No se pudo enviar el correo. Intentá de nuevo.');
+        }
       }
     } finally {
       setForgotLoading(false);
@@ -277,6 +290,20 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ConfirmDialog
+        visible={connectionErrorRetry !== null}
+        title="No pudimos conectar"
+        message="Revisá tus datos móviles o WiFi e intentá de nuevo."
+        confirmLabel="Reintentar"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          const retry = connectionErrorRetry;
+          setConnectionErrorRetry(null);
+          retry?.();
+        }}
+        onCancel={() => setConnectionErrorRetry(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

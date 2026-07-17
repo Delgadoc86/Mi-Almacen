@@ -133,6 +133,15 @@ test('usuario sin claim admin: adminListBusinesses, adminGetBusinessDetail y adm
   await assert.rejects(callable('adminListAuditLogs')({}));
 });
 
+test('usuario sin claim admin: adminGetBillingDetail, adminRecordPayment y adminUpdateBillingNotes rechazan', async () => {
+  await signInAs(NON_ADMIN_UID);
+  await assert.rejects(callable('adminGetBillingDetail')({ businessId: 'x' }));
+  await assert.rejects(
+    callable('adminRecordPayment')({ businessId: 'x', amount: 1000, method: 'efectivo' }),
+  );
+  await assert.rejects(callable('adminUpdateBillingNotes')({ businessId: 'x', notes: 'nota' }));
+});
+
 // ── adminGetDashboard ─────────────────────────────────────────────────────
 
 test('adminGetDashboard cuenta correctamente cada estado de plan', async () => {
@@ -352,4 +361,169 @@ test('adminListAuditLogs ordena por fecha descendente y respeta el límite globa
 
   const globalLogs = await callable('adminListAuditLogs')({});
   assert.ok(globalLogs.data.logs.length >= 2);
+});
+
+// ── Libreta de cobros (adminBilling) ─────────────────────────────────────
+// `plan` = acceso, `billing` = administración comercial interna. Estos
+// tests verifican explícitamente que registrar un pago NUNCA toca `plan`.
+
+test('adminGetBillingDetail devuelve billing null y sin pagos para un negocio sin datos de cobro todavía', async () => {
+  await clearFirestoreEmulator();
+  await seedBusiness('biz-billing-empty', { name: 'Sin cobro', email: 'q@test.com', plan: planFixture() });
+  await signInAs(ADMIN_UID);
+  const res = await callable('adminGetBillingDetail')({ businessId: 'biz-billing-empty' });
+  assert.equal(res.data.businessName, 'Sin cobro');
+  assert.equal(res.data.billing, null);
+  assert.deepEqual(res.data.payments, []);
+});
+
+test('adminGetBillingDetail rechaza con not-found si el negocio no existe', async () => {
+  await signInAs(ADMIN_UID);
+  await assert.rejects(
+    callable('adminGetBillingDetail')({ businessId: 'no-existe-billing' }),
+    (err) => { assert.equal(err.code, 'functions/not-found'); return true; },
+  );
+});
+
+test('adminRecordPayment rechaza monto inválido, método inválido y período inválido', async () => {
+  await clearFirestoreEmulator();
+  await seedBusiness('biz-validation', { name: 'X', email: 'r@test.com', plan: planFixture() });
+  await signInAs(ADMIN_UID);
+  await assert.rejects(
+    callable('adminRecordPayment')({ businessId: 'biz-validation', amount: 0, method: 'efectivo' }),
+    (err) => { assert.equal(err.code, 'functions/invalid-argument'); return true; },
+  );
+  await assert.rejects(
+    callable('adminRecordPayment')({ businessId: 'biz-validation', amount: -100, method: 'efectivo' }),
+    (err) => { assert.equal(err.code, 'functions/invalid-argument'); return true; },
+  );
+  await assert.rejects(
+    callable('adminRecordPayment')({ businessId: 'biz-validation', amount: 1000, method: 'bitcoin' }),
+    (err) => { assert.equal(err.code, 'functions/invalid-argument'); return true; },
+  );
+  await assert.rejects(
+    callable('adminRecordPayment')({ businessId: 'biz-validation', amount: 1000, method: 'efectivo', periodDays: 15 }),
+    (err) => { assert.equal(err.code, 'functions/invalid-argument'); return true; },
+  );
+});
+
+test('adminRecordPayment rechaza con not-found si el negocio no existe', async () => {
+  await signInAs(ADMIN_UID);
+  await assert.rejects(
+    callable('adminRecordPayment')({ businessId: 'no-existe-3', amount: 1000, method: 'efectivo' }),
+    (err) => { assert.equal(err.code, 'functions/not-found'); return true; },
+  );
+});
+
+test('adminRecordPayment crea el pago, actualiza el resumen, deja auditoría y NO toca el plan', async () => {
+  await clearFirestoreEmulator();
+  await seedBusiness('biz-record', { name: 'A cobrar', email: 's@test.com', plan: planFixture() });
+  await signInAs(ADMIN_UID);
+
+  const planBefore = await adminDb.collection('businesses').doc('biz-record').get();
+
+  const res = await callable('adminRecordPayment')({
+    businessId: 'biz-record',
+    amount: 5000,
+    method: 'transferencia',
+    periodDays: 30,
+    note: 'primer pago',
+  });
+
+  assert.equal(res.data.success, true);
+  assert.equal(res.data.billing.lastAmount, 5000);
+  assert.equal(res.data.billing.paymentMethod, 'transferencia');
+  assert.equal(res.data.billing.currency, 'ARS');
+  assert.equal(res.data.billing.notes, 'primer pago');
+  assert.ok(res.data.billing.nextPaymentDueAt);
+
+  const nextDueMs = new Date(res.data.billing.nextPaymentDueAt).getTime();
+  const paidAtMs = new Date(res.data.billing.lastPaymentAt).getTime();
+  assert.ok(Math.abs(nextDueMs - (paidAtMs + 30 * DAY_MS)) < 5000);
+
+  // El plan del negocio queda exactamente igual que antes de registrar el pago.
+  const planAfter = await adminDb.collection('businesses').doc('biz-record').get();
+  assert.deepEqual(planAfter.data().plan, planBefore.data().plan);
+
+  const detail = await callable('adminGetBillingDetail')({ businessId: 'biz-record' });
+  assert.equal(detail.data.payments.length, 1);
+  assert.equal(detail.data.payments[0].amount, 5000);
+  assert.equal(detail.data.payments[0].note, 'primer pago');
+
+  const logs = await callable('adminListAuditLogs')({ businessId: 'biz-record' });
+  assert.equal(logs.data.logs.length, 1);
+  assert.equal(logs.data.logs[0].action, 'record_payment');
+  assert.equal(logs.data.logs[0].actorUid, ADMIN_UID);
+  assert.equal(logs.data.logs[0].previousBilling, null);
+  assert.equal(logs.data.logs[0].nextBilling.lastAmount, 5000);
+  assert.equal(logs.data.logs[0].previousPlan, null);
+  assert.equal(logs.data.logs[0].nextPlan, null);
+});
+
+test('adminRecordPayment sin período no borra un nextPaymentDueAt ya existente', async () => {
+  await clearFirestoreEmulator();
+  await seedBusiness('biz-keep-due', { name: 'X', email: 't@test.com', plan: planFixture() });
+  await signInAs(ADMIN_UID);
+
+  const first = await callable('adminRecordPayment')({
+    businessId: 'biz-keep-due', amount: 3000, method: 'efectivo', periodDays: 30,
+  });
+  const originalDueAt = first.data.billing.nextPaymentDueAt;
+
+  const second = await callable('adminRecordPayment')({
+    businessId: 'biz-keep-due', amount: 500, method: 'otro',
+  });
+
+  assert.equal(second.data.billing.lastAmount, 500);
+  assert.equal(second.data.billing.nextPaymentDueAt, originalDueAt);
+});
+
+test('adminUpdateBillingNotes actualiza solo la nota, crea el resumen si no existía y deja auditoría', async () => {
+  await clearFirestoreEmulator();
+  await seedBusiness('biz-notes', { name: 'X', email: 'u@test.com', plan: planFixture() });
+  await signInAs(ADMIN_UID);
+
+  const res = await callable('adminUpdateBillingNotes')({
+    businessId: 'biz-notes', notes: 'avisó que paga la semana que viene',
+  });
+  assert.equal(res.data.billing.notes, 'avisó que paga la semana que viene');
+  assert.equal(res.data.billing.lastAmount, null);
+  assert.equal(res.data.billing.nextPaymentDueAt, null);
+
+  const logs = await callable('adminListAuditLogs')({ businessId: 'biz-notes' });
+  assert.equal(logs.data.logs.length, 1);
+  assert.equal(logs.data.logs[0].action, 'update_billing_notes');
+
+  const planSnap = await adminDb.collection('businesses').doc('biz-notes').get();
+  assert.equal(planSnap.data().plan.type, 'trial');
+});
+
+test('adminUpdateBillingNotes rechaza con not-found si el negocio no existe', async () => {
+  await signInAs(ADMIN_UID);
+  await assert.rejects(
+    callable('adminUpdateBillingNotes')({ businessId: 'no-existe-4', notes: 'x' }),
+    (err) => { assert.equal(err.code, 'functions/not-found'); return true; },
+  );
+});
+
+test('adminGetDashboard cuenta cobros esta semana, vencidos y sin datos a partir de adminBilling', async () => {
+  await clearFirestoreEmulator();
+  await seedBusiness('biz-due-soon', { name: 'X', email: 'v@test.com', plan: planFixture() });
+  await seedBusiness('biz-overdue', { name: 'Y', email: 'w@test.com', plan: planFixture() });
+  await seedBusiness('biz-no-billing', { name: 'Z', email: 'x@test.com', plan: planFixture() });
+
+  await signInAs(ADMIN_UID);
+  await callable('adminRecordPayment')({ businessId: 'biz-due-soon', amount: 1000, method: 'efectivo', periodDays: 30 });
+  await adminDb.collection('adminBilling').doc('biz-due-soon').update({
+    nextPaymentDueAt: Timestamp.fromMillis(Date.now() + 3 * DAY_MS),
+  });
+  await callable('adminRecordPayment')({ businessId: 'biz-overdue', amount: 1000, method: 'efectivo', periodDays: 30 });
+  await adminDb.collection('adminBilling').doc('biz-overdue').update({
+    nextPaymentDueAt: Timestamp.fromMillis(Date.now() - 2 * DAY_MS),
+  });
+
+  const res = await callable('adminGetDashboard')();
+  assert.equal(res.data.billingDueThisWeek, 1);
+  assert.equal(res.data.billingOverdue, 1);
+  assert.equal(res.data.billingNoData, 1); // biz-no-billing
 });

@@ -124,6 +124,14 @@ numeración de fases, independiente de la de este documento — ver
 - Pantalla nueva en el panel admin (`/admin/update-config`) para activar/desactivar el aviso y cargar versión, título, mensaje y URL de descarga
 - Corrección de bug encontrado en el camino: `expo-file-system` v19 (SDK 54) rompía "Exportar mis datos (JSON)" — la API usada se movió a `expo-file-system/legacy`
 
+## ✅ Fase 18 — Manejo de conexión en Login / Registro / Recuperar contraseña
+- `AuthContext`: `login()`, `register()` y `forgotPassword()` envueltos en `withTimeout` (9s, mismo helper ya usado para la carga inicial del perfil) — Firebase Auth no tiene timeout propio en sus llamadas de red, así que sin esto una conexión colgada dejaba el botón con el círculo de carga girando para siempre
+- Nuevo `src/utils/authError.ts` (`isConnectionError`): distingue "sin conexión / Firebase no respondió" de un error real de credenciales, sin exponer códigos técnicos al usuario
+- Diálogo "No pudimos conectar" (reutiliza `ConfirmDialog`) con **Reintentar** (repite el mismo intento con los datos ya cargados en el formulario) y **Cancelar** (cierra el diálogo, el usuario queda en el formulario tal cual estaba) — en Login, Registro y Recuperar contraseña
+- No navega, no cierra sesión, no borra lo que el usuario ya escribió
+- `OfflineBanner` ("Sin conexión · Solo lectura") se movió de `(tabs)/_layout.tsx` a `(app)/_layout.tsx` — único montaje para toda el área autenticada (tabs + pantallas internas de Caja/Fiados/Productos/Categorías), no solo los 5 tabs principales. No aparece en Login/Registro (fuera de ese árbol de rutas)
+- "Solicitar eliminación de cuenta" (Configuración) ahora usa `useConnectionGuard` (nuevo, `src/hooks/useConnectionGuard.ts`) en vez de quedar sin ningún guard: exige conexión confirmada con el servidor, pero a propósito **no** exige plan activo — debe poder solicitarse con trial vencido, solo lectura o suspendido
+
 ## 🔲 Por definir
 
 - Estadísticas y reportes

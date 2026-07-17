@@ -5,7 +5,7 @@ import { theme } from '@/theme';
 import { IconChip } from './IconChip';
 import type { IconName, Tone } from './types';
 
-type Badge = { label: string; tone: 'success' | 'danger' | 'muted' };
+type Badge = { label: string; tone: 'success' | 'warning' | 'danger' | 'muted' };
 
 type Props = {
   icon?: IconName;
@@ -23,6 +23,7 @@ type Props = {
 
 const BADGE_COLORS: Record<Badge['tone'], { bg: string; text: string }> = {
   success: { bg: theme.colors.successMid, text: theme.colors.success },
+  warning: { bg: theme.colors.warningLight, text: theme.colors.warning },
   danger: { bg: theme.colors.dangerMid, text: theme.colors.error },
   muted: { bg: theme.colors.divider, text: theme.colors.textSecondary },
 };

@@ -21,6 +21,16 @@ Nunca se usan datos reales en los ejemplos de este documento. Reemplazar:
 - La política de limpieza de imágenes de build de Cloud Functions quedó configurada a 30 días (evita acumulación de artefactos de builds anteriores).
 - La cuenta administradora ya tiene el custom claim `admin: true` asignado.
 
+**Pendiente de deploy:** las 3 Cloud Functions de la libreta de cobros
+(`adminGetBillingDetail`, `adminRecordPayment`, `adminUpdateBillingNotes`,
+`functions/index.js`) y la regla explícita `adminBilling/{document=**}` en
+`firestore.rules` están escritas y con tests locales, pero **no se
+desplegaron todavía** — el panel admin de la app no va a poder usar la
+sección "Cobro" hasta que corra `firebase deploy --only firestore:rules,functions`
+(ver el procedimiento más abajo). No requieren cambios en `firestore.indexes.json`
+(las queries nuevas son de campo único o reusan el índice compuesto ya
+desplegado de `adminAuditLogs`).
+
 Para el detalle de qué se implementó en cada fase (arquitectura, archivos,
 tests), ver `docs/SAAS_ROADMAP.md`.
 
@@ -118,6 +128,7 @@ Firebase emite un token nuevo.
 ## Reglas de operación manual
 
 - **No editar el campo `plan` de un negocio manualmente** (Firestore Console, script ad-hoc) salvo pruebas controladas y puntuales — el camino real para cambiar el plan de una cuenta es el panel admin (`adminChangePlan`), que deja auditoría en `adminAuditLogs`. Una edición manual no queda registrada en ningún lado.
+- **No editar `adminBilling/{businessId}` manualmente** por el mismo motivo — usar siempre "Registrar pago" o la edición de notas desde el panel admin (`adminRecordPayment`/`adminUpdateBillingNotes`), que dejan auditoría. Recordar que `adminBilling` es administración comercial, no plan: registrar un pago **nunca** activa Pro ni cambia el acceso del negocio por sí solo — esa sigue siendo una acción separada y manual (`adminChangePlan`) que el admin decide después de ver el estado de cobro.
 - **No desplegar Rules ni Functions desde una cuenta de Firebase CLI equivocada.** Verificar con `firebase projects:list` que la cuenta logueada tiene acceso al proyecto antes de cualquier `firebase deploy`.
 - Los scripts privilegiados (`bootstrap-admin.mjs`, `migrate-existing-plans.mjs`) son dry-run por defecto — nunca escriben nada salvo que se pase `--apply` explícitamente.
 

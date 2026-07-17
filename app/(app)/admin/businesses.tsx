@@ -20,13 +20,28 @@ const FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'suspended', label: 'Suspendido' },
 ];
 
-const BADGE_BY_KIND: Record<AdminPlanKind, { label: string; tone: 'success' | 'danger' | 'muted' }> = {
+const BADGE_BY_KIND: Record<AdminPlanKind, { label: string; tone: 'success' | 'warning' | 'danger' | 'muted' }> = {
   'trial-active': { label: 'Trial', tone: 'muted' },
-  'trial-expired': { label: 'Vencido', tone: 'danger' },
+  'trial-expired': { label: 'Vencido', tone: 'warning' },
   pro: { label: 'Pro', tone: 'success' },
-  readonly: { label: 'Solo lectura', tone: 'danger' },
+  // Ámbar, no rojo: es el estado esperable de un trial vencido sin pago, no
+  // una decisión punitiva — rojo queda solo para "Suspendido".
+  readonly: { label: 'Solo lectura', tone: 'warning' },
   suspended: { label: 'Suspendido', tone: 'danger' },
   'no-plan': { label: 'Sin plan', tone: 'danger' },
+};
+
+// Con pocos negocios el orden no importa; con 20-30 sí — lo que necesita
+// una decisión (suspendido, sin plan, vencido, solo lectura) sube arriba,
+// lo sano (Pro, trial en curso) queda abajo. Ordenamiento puramente local,
+// no pide nada nuevo al servidor.
+const KIND_PRIORITY: Record<AdminPlanKind, number> = {
+  'no-plan': 0,
+  suspended: 1,
+  'trial-expired': 2,
+  readonly: 3,
+  'trial-active': 4,
+  pro: 5,
 };
 
 function formatDate(iso: string | null): string {
@@ -58,11 +73,13 @@ export default function AdminBusinessesScreen() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return businesses.filter((b) => {
-      if (filter !== 'all' && b.kind !== filter) return false;
-      if (!q) return true;
-      return b.name.toLowerCase().includes(q) || b.email.toLowerCase().includes(q);
-    });
+    return businesses
+      .filter((b) => {
+        if (filter !== 'all' && b.kind !== filter) return false;
+        if (!q) return true;
+        return b.name.toLowerCase().includes(q) || b.email.toLowerCase().includes(q);
+      })
+      .sort((a, b) => KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind]);
   }, [businesses, search, filter]);
 
   return (
@@ -72,6 +89,7 @@ export default function AdminBusinessesScreen() {
 
         <FlatList
           horizontal
+          style={styles.filterList}
           data={FILTERS}
           keyExtractor={(item) => item.value}
           showsHorizontalScrollIndicator={false}
@@ -86,6 +104,12 @@ export default function AdminBusinessesScreen() {
           )}
         />
 
+        {!loading && !error && businesses.length > 0 && (
+          <Text style={styles.resultsCount}>
+            {filtered.length} de {businesses.length} {businesses.length === 1 ? 'negocio' : 'negocios'}
+          </Text>
+        )}
+
         {loading ? (
           <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
         ) : error ? (
@@ -98,14 +122,16 @@ export default function AdminBusinessesScreen() {
           />
         ) : (
           <FlatList
+            style={styles.resultsList}
             data={filtered}
             keyExtractor={(item) => item.businessId}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
             renderItem={({ item }) => (
               <ListRow
                 title={item.name}
-                subtitle={`${item.email || 'sin email'} · alta ${formatDate(item.createdAt)}`}
+                subtitle={item.email || 'sin email'}
                 badge={BADGE_BY_KIND[item.kind]}
                 onPress={() => router.push(`/admin/business/${item.businessId}`)}
               />
@@ -120,8 +146,21 @@ export default function AdminBusinessesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   container: { flex: 1, paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.lg },
+  // Sin esto, un <FlatList horizontal> dentro de una columna flex reclama
+  // todo el espacio vertical sobrante del contenedor (aunque su contenido
+  // real mida ~36px) — empuja el resto de la pantalla hacia abajo y deja
+  // el hueco en blanco que se veía entre los chips y la lista de negocios.
+  filterList: { flexGrow: 0, flexShrink: 0 },
   filterRow: { gap: 8, paddingBottom: theme.spacing.md },
   filterChip: { marginRight: 0 },
+  resultsCount: {
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.font.micro,
+    color: theme.colors.muted,
+    marginBottom: theme.spacing.sm,
+  },
   loader: { marginTop: 40 },
+  resultsList: { flex: 1 },
   list: { paddingBottom: 60 },
+  rowDivider: { height: 1, backgroundColor: theme.colors.divider },
 });

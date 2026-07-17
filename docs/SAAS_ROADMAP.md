@@ -9,18 +9,19 @@ independiente de la de `ROADMAP.md` (que trackea features del producto).
 ## Estado actual (resumen ejecutivo)
 
 **Fases completadas (implementadas y probadas contra emulador):** 1, 2, 3,
-4, 4.1, 5, 5.1, 6, 7 — modelo de plan en Firestore, helper central de estado
-de plan, banner visual, modo solo lectura en la UI, sincronización en tiempo
-real del negocio, enforcement real en Firestore Rules (incluido el
+4, 4.1, 5, 5.1, 6, 7, 8, 9 — modelo de plan en Firestore, helper central de
+estado de plan, banner visual, modo solo lectura en la UI, sincronización en
+tiempo real del negocio, enforcement real en Firestore Rules (incluido el
 documento raíz del negocio), panel admin móvil interno con Cloud Functions
-callable, y contacto/activación manual (link a soporte en banner, modal de
-bloqueo y Configuración).
+callable, contacto/activación manual (link a soporte en banner, modal de
+bloqueo y Configuración), libreta de cobros administrativa (Fase 8), y
+limpieza/rediseño visual del panel admin (Fase 9, solo UI).
 
 **Qué está desplegado hoy:**
 - Firebase Blaze activo en el proyecto.
-- `firestore.rules` desplegadas (incluye el enforcement de planes de Fase 5/5.1 y el bloqueo de `adminAuditLogs` de Fase 6).
+- `firestore.rules` desplegadas (incluye el enforcement de planes de Fase 5/5.1 y el bloqueo de `adminAuditLogs` de Fase 6) — **sin incluir todavía** el bloqueo explícito de `adminBilling` de Fase 8, ver más abajo.
 - `firestore.indexes.json` desplegados.
-- Las 5 Cloud Functions del panel admin desplegadas.
+- Las 5 Cloud Functions del panel admin (Fase 6) desplegadas. Las 3 Cloud Functions de la libreta de cobros (Fase 8: `adminGetBillingDetail`, `adminRecordPayment`, `adminUpdateBillingNotes`) **no están desplegadas todavía** — implementadas y con tests locales, pendiente de tu autorización de deploy.
 - Custom claim `admin: true` ya asignado a la cuenta administradora.
 
 Detalle de credenciales, procedimiento de deploy y operación:
@@ -32,7 +33,8 @@ desplegó.
 
 **Qué falta (pendientes reales, sin maquillar):**
 - Validación manual end-to-end del panel admin móvil desde la APK real con `admin: true`.
-- Flujo comercial/manual para cobrar Pro (no hay cobro automático).
+- Desplegar Fase 8 (Rules + las 3 Cloud Functions de billing) — ver arriba.
+- Cobro sigue siendo 100% manual — Fase 8 agrega una libreta para administrarlo (último pago, próximo cobro esperado, método, monto, notas), no automatiza nada: no hay corte automático por vencimiento, no hay cobro automático, no hay gateway.
 - Mercado Pago: no implementado.
 - Panel web: no existe todavía (el panel admin es 100% móvil, dentro de la APK).
 - Multi-usuario por negocio: no existe (1 usuario : 1 negocio).
@@ -1383,3 +1385,220 @@ propios). `tsc --noEmit`: solo los 2 errores preexistentes de
   puramente el link de contacto, no un checkout.
 
 **Actualización:** Blaze está activo, Functions/Rules/Indexes están desplegadas y la cuenta administradora ya tiene `admin: true`. Lo único que sigue pendiente de esta fase es la validación manual end-to-end del panel en un dispositivo real — ver la lista de pendientes reales al inicio del documento.
+
+---
+
+## Fase 8 — Libreta de cobros administrativa (adminBilling)
+
+Cierra el gap identificado en la auditoría de modelo SaaS/pago: no existía
+ningún registro de "quién pagó, cuándo, cuánto y por qué medio" — el admin
+dependía 100% de memoria o de una planilla externa. `plan` (acceso) y
+`billing` (administración comercial) quedan explícitamente separados:
+**esta fase no toca `canWrite`, no toca Firestore Rules de acceso, no toca
+`getPlanStatus`/`resolveSyncAwarePlanStatus`/`useWriteGuard`, no toca
+Caja/Fiados/Productos/Configuración del cliente, y ninguna de sus tres
+Cloud Functions escribe jamás `businesses/{businessId}.plan`.** Activar Pro
+o pasar a solo lectura siguen siendo, únicamente, `adminChangePlan` — una
+decisión separada y manual del admin.
+
+### Decisión de diseño: colección separada, no un campo en `businesses`
+
+`adminBilling/{businessId}` (+ subcolección `payments/{paymentId}`) es una
+colección propia, **no** un campo dentro de `businesses/{businessId}`. Motivo:
+`businesses/{businessId}` es un documento que el propio dueño puede
+actualizar (nombre, preferencias) cuando su plan está activo — cualquier
+campo de billing ahí adentro habría quedado, en el mejor de los casos, a un
+error de Rules de distancia de ser editable por el cliente (una app
+modificada, o la API de Firestore directa). Separarlo en una colección
+inaccesible por diseño (ver Rules abajo) elimina esa superficie por
+completo, en vez de depender de una regla condicional bien escrita.
+
+### Modelo de datos
+
+```
+adminBilling/{businessId}
+  businessId, lastPaymentAt?, nextPaymentDueAt?, paymentMethod?,
+  lastAmount?, currency?, notes?, updatedAt, updatedBy
+
+adminBilling/{businessId}/payments/{paymentId}
+  businessId, amount, currency, method, paidAt, periodDays?,
+  nextPaymentDueAt?, note?, createdAt, createdBy
+```
+
+`amount` > 0, `method` uno de `transferencia | mercado_pago_link | efectivo
+| otro`, `periodDays` uno de `30 | 90 | 365` (o ausente = "sin período",
+no toca `nextPaymentDueAt`), `currency` fijo en `'ARS'` (no lo decide el
+cliente), `note`/`notes` con tope de 500 caracteres, `paidAt` opcional
+(default: ahora) con tolerancia de 24h hacia el futuro (margen de reloj del
+dispositivo del admin, no pagos "del futuro" de verdad). No se guarda nada
+de caja, fiados, movimientos, clientes, comprobantes ni datos bancarios —
+exactamente lo mínimo para saber a quién y cuándo cobrar.
+
+### Cloud Functions nuevas (`functions/index.js`)
+
+Mismo portero que las 5 de Fase 6 (`request.auth.token.admin === true`),
+mismo estilo de validación exhaustiva de entrada:
+
+- **`adminGetBillingDetail({ businessId })`** — resumen + últimos 10 pagos.
+- **`adminRecordPayment({ businessId, amount, method, paidAt?, periodDays?, note? })`**
+  — crea el pago, actualiza el resumen (solo las claves que ese pago
+  realmente informa — un pago "sin período" no borra un `nextPaymentDueAt`
+  que ya existía; un pago sin nota no borra la nota interna vigente), deja
+  auditoría. Transaccional, igual que `adminChangePlan`.
+- **`adminUpdateBillingNotes({ businessId, notes })`** — edición acotada de
+  la nota interna sin registrar un pago (ej. "avisó que paga la semana que
+  viene"). Crea el resumen si todavía no existía.
+
+`adminGetDashboard` (Fase 6) se extendió con 3 contadores derivados de
+`adminBilling` (no de `plan`): `billingDueThisWeek`, `billingOverdue`,
+`billingNoData`. Un negocio sin documento de billing, o con documento pero
+sin `nextPaymentDueAt` (ej. solo se le registró una nota, o un pago "sin
+período"), cuenta como "sin datos" — no hay nada que vigilar todavía.
+
+### Auditoría
+
+Reutiliza `adminAuditLogs` (misma colección que Fase 6, no una nueva) — dos
+`action` nuevos: `record_payment`, `update_billing_notes`. Cada entrada
+incluye `previousBilling`/`nextBilling` (resumen antes/después), además de
+los `previousPlan`/`nextPlan` ya existentes (quedan `null` en las entradas
+de billing, y viceversa). Mismo índice compuesto `businessId + createdAt`
+ya desplegado — no hizo falta ninguno nuevo.
+
+### Firestore Rules
+
+Se agregó una regla explícita de deny para `adminBilling/{document=**}`,
+mismo patrón y mismo motivo que la de `adminAuditLogs` (Fase 6): el
+catch-all final del archivo ya deniega cualquier colección sin match
+explícito, así que esta regla es técnicamente redundante — se dejó
+explícita a propósito, por claridad, y para no depender silenciosamente del
+catch-all si algún día se agrega una regla más permisiva por encima de él.
+No se tocó `isPlanActiveValue`, `planUnchanged`, la lógica de
+`deletionRequest`, ni las reglas de `products`/`customers`/`cashSessions`/
+`cashMovements`.
+
+### Panel admin (móvil, no se creó panel web)
+
+Nueva sección **"Cobro"** en `app/(app)/admin/business/[businessId].tsx`:
+estado (`Sin datos de cobro` / `Al día` / `Vence pronto` / `Cobro
+pendiente`, calculado en el cliente a partir de `nextPaymentDueAt` — no
+tiene ninguna relación con `getPlanStatus`), último pago, próximo cobro
+esperado, método, último monto, notas, y los últimos pagos registrados.
+Botón **"Registrar pago"** abre un formulario (monto, método, período,
+nota) que llama `adminRecordPayment` y refresca solo esa sección — nunca
+toca las acciones de plan de la sección "Acciones", que siguen intactas y
+sin relación alguna con esto. `app/(app)/admin/index.tsx` (dashboard) suma
+una fila "COBRO" con los 3 contadores nuevos, visualmente separada de las
+métricas de plan para no sugerir que afectan acceso.
+
+### Tests
+
+- `scripts/rules-tests/account-lifecycle.test.mjs`: 3 tests nuevos —
+  nadie (ni el propio dueño) puede leer/escribir `adminBilling/{businessId}`
+  ni su subcolección `payments` directamente desde un cliente.
+- `scripts/functions-tests/admin.test.mjs`: cobertura de las 3 funciones
+  nuevas (portero admin, validación de monto/método/período, creación de
+  pago + actualización de resumen + auditoría, que un pago sin período no
+  pisa un `nextPaymentDueAt` previo, y — explícitamente — que
+  `businesses/{businessId}.plan` queda bit a bit igual antes/después de
+  `adminRecordPayment`) y de los 3 contadores nuevos de `adminGetDashboard`.
+
+### Qué NO se hizo (respetando el alcance)
+
+- No se integró Mercado Pago ni Google Play Billing.
+- No hay cobro ni checkout automático — todo pago se carga a mano desde el
+  panel admin después de confirmarlo por fuera de la app.
+- No hay corte automático por `nextPaymentDueAt` vencido — sigue siendo
+  `adminChangePlan → set_readonly`, una decisión manual y separada.
+- No se agregó plan freemium ni planes adicionales.
+- No se mostró precio ni ningún dato de billing en la app del cliente —
+  la libreta es 100% interna del panel admin.
+- No se desplegó nada (Rules ni Functions) — pendiente de autorización,
+  ver "Estado actual" al inicio del documento.
+
+---
+
+## Fase 9 — Limpieza y rediseño del panel admin (solo UI)
+
+Cierra los hallazgos de la auditoría UX/UI del panel admin: el dashboard y
+la lista de negocios se veían/leían como pantallas de debug, no como un
+panel SaaS. **Cero cambios de lógica** — ni de `plan`, ni de billing, ni de
+Rules, ni de Functions, ni de modelos. Todo lo de acá es UI de
+`app/(app)/admin/` más dos ajustes aditivos a componentes compartidos.
+
+### Limpieza mínima (detalle de negocio)
+
+- Eliminadas las filas redundantes "Plan" y "Estado" (raw `plan.status` sin
+  traducir) — ya estaban representadas por el badge de arriba.
+- UID de fila principal a caption chico al final de "Datos".
+- Solo se muestra la fecha relevante: "Trial vence" si está en trial, "Pro
+  activado" si es Pro — nunca ambas.
+- `readonly` pasó de rojo a ámbar (`KIND_COLOR`, `getKindColor()` nueva,
+  local al archivo): es el estado esperable de un trial vencido sin pago,
+  no una decisión punitiva — rojo queda reservado para `suspended`. Un
+  trial activo con ≤5 días también se pinta ámbar (cálculo puramente
+  visual sobre `trialEndsAt`, no toca `classifyPlan` ni ningún `kind`
+  nuevo).
+- Acciones de plan agrupadas en dos filas separadas por un divisor:
+  constructivas arriba (Activar Pro, Extender trial, Solo lectura),
+  Suspender/Reactivar abajo — mismo orden y misma lógica que antes, solo
+  jerarquía visual.
+- "HISTORIAL DE ACCIONES ADMIN" → "AUDITORÍA".
+- Montos (Cobro y Últimos pagos) ahora usan `AmountDisplay` en vez de texto
+  plano — se le agregó un tamaño `sm` nuevo (aditivo, no afecta los usos
+  existentes en Caja/Fiados) porque el componente no tenía ninguna
+  variante chica para filas compactas.
+
+### Rediseño del dashboard y la lista de negocios
+
+- **Dashboard:** la grilla plana de 9 tarjetas del mismo tamaño se
+  reemplazó por dos tarjetas tipo lista (reusando `ListRow` con su
+  `value`/`valueTone`, sin componentes nuevos): una con las 6 categorías
+  de plan que son una partición completa de `businesses` (Pro, Trial
+  activo, Trial vencido, Solo lectura, Suspendido, Sin plan — siempre
+  suman el "N negocios en total" de arriba), y otra para los 3 contadores
+  de cobro. Se agregó un aviso "Atención" (`InlineMessage`, condicional)
+  cuando hay cobros vencidos, trials vencidos, suspendidos o solicitudes
+  de eliminación — puramente informativo, sin links ni queries nuevas.
+  Los contadores de cobro usan `?? 0` porque hasta que no se despliegue la
+  Fase 8, el backend real todavía no devuelve esos campos y quedaban en
+  blanco en vez de mostrar "0".
+- **Lista de negocios:** badge de "Solo lectura"/"Trial vencido" de rojo a
+  ámbar — requirió agregar el tono `warning` a `ListRow` (antes solo
+  soportaba `success`/`danger`/`muted` para badges; aditivo, no rompe
+  ningún uso existente). El subtítulo de cada fila combinaba email + fecha
+  de alta en una sola línea (`numberOfLines={1}`) — con emails largos,
+  React Native truncaba antes de llegar a la fecha, dejando un "..." a
+  mitad de texto. Se sacó la fecha de esa línea (ya está en el detalle).
+  Se agregó un contador "X de Y negocios" y un orden local (lo que
+  necesita atención — sin plan, suspendido, vencido, solo lectura — sube
+  arriba, lo sano queda abajo) pensado para cuando haya 20-30 negocios,
+  no para el puñado actual.
+- **Bug de layout real, no solo estético:** la `FlatList horizontal` de
+  los chips de filtro no tenía `style` propio — en React Native, un
+  `FlatList` sin `style` dentro de una columna flex reclama el espacio
+  vertical sobrante del contenedor aunque su contenido real mida ~36px,
+  empujando todo lo de abajo (contador, lista de negocios) hacia el fondo
+  de la pantalla y dejando un hueco en blanco enorme en el medio. Se
+  corrigió con `flexGrow: 0, flexShrink: 0` en esa lista — bug preexistente,
+  no introducido por el rediseño (se veía igual antes de tocar la pantalla).
+  La lista vertical de negocios también recibió `style={{flex:1}}` para
+  que ocupe el espacio disponible correctamente en vez de depender del
+  tamaño implícito de su contenido.
+
+### Qué NO se tocó
+
+- `plan`, `getPlanStatus`, `resolveSyncAwarePlanStatus`, `useWriteGuard`,
+  `PlanBanner`, `PlanRestrictionDialog` — cero cambios.
+- Ninguna Cloud Function, ninguna Rule, `src/services/admin.ts`,
+  `src/models/index.ts` — cero cambios.
+- No se agregó pantalla de auditoría global ni filtros de cobro en la
+  lista (la lista no puede mostrar estado de cobro por fila sin cruzar
+  `adminListBusinesses` con `adminBilling` — Function que no se tocó en
+  esta fase, queda como pendiente si se quiere más adelante).
+- No hubo deploy ni build.
+
+### Tests
+
+`tsc --noEmit` y `npm run test:unit` (21/21) verificados después de cada
+cambio de esta fase — sin tests propios nuevos (es UI pura, sin lógica que
+testear con `node:test`).
