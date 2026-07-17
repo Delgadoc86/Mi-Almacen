@@ -130,6 +130,8 @@ export default function AdminBusinessesScreen() {
             ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
             renderItem={({ item }) => (
               <ListRow
+                icon={item.hasDeletionRequest ? 'alert-circle-outline' : undefined}
+                iconTone="danger"
                 title={item.name}
                 subtitle={item.email || 'sin email'}
                 badge={BADGE_BY_KIND[item.kind]}

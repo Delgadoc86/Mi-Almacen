@@ -1257,14 +1257,16 @@ arbitraria.
 
 El flujo anterior (borrado en lotes de Firestore + borrado de la cuenta de
 Firebase Auth, ver `ROADMAP.md` Fase 11) se reemplazó por una solicitud no
-destructiva: el usuario crea `deletionRequest` y el procesamiento real
-sigue siendo manual, a cargo de soporte. Un borrado automático que falla a
-mitad de camino (Firestore borrado, Auth no, o viceversa) deja una cuenta
-en un estado inconsistente sin forma limpia de recuperarla; una solicitud
-registrada y revisada a mano es más lenta pero no tiene ese riesgo. No
-existe todavía un procesamiento automatizado (Cloud Function programada)
-para resolver estas solicitudes — es un pendiente real, no una decisión
-final.
+destructiva: el usuario crea `deletionRequest`, no borra nada por sí solo.
+Un borrado automático que falla a mitad de camino (Firestore borrado, Auth
+no, o viceversa) deja una cuenta en un estado inconsistente sin forma
+limpia de recuperarla. La decisión sigue siendo la misma: el procesamiento
+real no es automático, es una acción deliberada del admin — pero desde
+Fase 18 ya no es edición manual de Firebase Console: el admin lo ejecuta
+desde el panel, con revisión previa y confirmación fuerte, vía dos Cloud
+Functions nuevas (`adminGetDeletionPreview`/`adminDeleteRequestedAccount`).
+Detalle completo en la Fase 18, más abajo, y en `docs/SAAS_ROADMAP.md`,
+Fase 10.
 
 ### Por qué Login/Registro/Recuperar contraseña tienen su propio timeout
 
@@ -1325,4 +1327,74 @@ Puerto + Terracota Almacén) en lugar de los íconos placeholder por defecto
 de Expo se documenta en `docs/BRANDING_E_ICONOS.md`, junto con el archivo
 SVG maestro y el procedimiento para regenerar los assets derivados. No se
 duplica ese contenido acá.
+
+## Fase 18 — Eliminación definitiva de cuenta
+
+Detalle de implementación (archivos, Cloud Functions, tests) en
+`docs/SAAS_ROADMAP.md`, Fase 10. Acá se resume el **por qué** de cada
+decisión.
+
+### Por qué no se creó una cola de jobs (`adminDeletionJobs`)
+
+El volumen de datos de un solo negocio (productos, clientes, movimientos,
+cajas de un comercio de barrio) es chico. `db.recursiveDelete()` del Admin
+SDK borra un documento y todas sus subcolecciones recursivamente, manejando
+la paginación por dentro — alcanza de sobra en una sola Cloud Function
+callable con `timeoutSeconds: 120`. Una cola con estados
+`processing/completed/failed` hubiera sido infraestructura nueva
+resolviendo un problema de escala que este proyecto no tiene hoy.
+
+### Por qué la confirmación es escribir el email del dueño, no un texto fijo como "ELIMINAR"
+
+Un texto fijo confirma que el admin quiso tocar "algo destructivo", no que
+está mirando el negocio correcto — se copia y pega igual de rápido para
+cualquier negocio. Exigir el email exacto del dueño (leído server-side de
+`users/{id}` en el momento de la llamada, nunca confiado del cliente) obliga
+a que el admin haya mirado la revisión previa (que muestra ese email) antes
+de confirmar, y hace mucho más difícil borrar el negocio equivocado por
+error de un solo click o de copiar/pegar el `businessId` de otra pestaña.
+
+### Por qué se elimina la cuenta de Firebase Auth en vez de deshabilitarla
+
+Se evaluaron las dos opciones con el usuario antes de implementar.
+Deshabilitar (`disabled: true`) es reversible pero dejaba la cuenta (y el
+email) "vivos" indefinidamente — no coincide con "eliminación definitiva".
+Se eligió `deleteUser()`: borrado permanente e irreversible, el email queda
+libre para registrarse de nuevo como cuenta nueva. Coherente con que ya no
+queda ningún dato de ese negocio en Firestore después del resto del
+borrado.
+
+### Por qué el reintento se basa en `adminAuditLogs` y no en un documento de estado separado
+
+Antes de borrar nada se escribe un log `delete_account_requested_execute`.
+Si una ejecución posterior encuentra que el negocio ya no existe, en vez de
+fallar con `not-found` (que bloquearía retomar un borrado a medio camino),
+busca ese mismo log por `businessId` — mismo índice compuesto
+`businessId + createdAt` que ya usa `adminListAuditLogs` desde Fase 6, sin
+necesidad de una colección ni un índice nuevo. Un log de
+`delete_account_completed` devuelve éxito idempotente sin re-ejecutar nada;
+uno de `delete_account_requested_execute` sin `completed` posterior retoma
+el borrado. Como la query siempre filtra por el `businessId` que mandó el
+caller en esa llamada (no por algo leído del log), y esos logs solo existen
+para negocios que de verdad pasaron la validación de `deletionRequest` +
+confirmación, no hay forma de usar el historial de un negocio para borrar
+otro.
+
+### Por qué `adminGetDeletionPreview` no deja auditoría
+
+Es de solo lectura y se puede llamar repetidas veces sin efecto — un log
+por cada vista de la pantalla de revisión sería ruido, no auditoría útil.
+Solo quedan registrados los pasos que sí cambian estado:
+`delete_account_requested_execute`, `delete_account_completed` y
+`delete_account_failed`.
+
+### Por qué `firestore.rules` no se tocó
+
+`businesses/{businessId}` y `users/{uid}` ya denegaban `delete` a cualquier
+cliente desde Fase 5.1 (para evitar el borrado no atómico que motivó esa
+decisión, ver más arriba); `adminAuditLogs`/`adminBilling` ya eran `allow
+read, write: if false` desde Fase 6/8. Las dos Cloud Functions nuevas usan
+el Admin SDK, que ignora las Rules por completo, y no se creó ninguna
+colección nueva alcanzable por el cliente — no había nada que debilitar ni
+nada nuevo que denegar explícitamente.
 

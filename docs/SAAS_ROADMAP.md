@@ -1,7 +1,7 @@
 # Mi Almacén → SaaS: Roadmap técnico
 
 Este documento es la **fuente de verdad del SaaS**: qué se implementó, qué
-está desplegado y qué falta. Usa su propia numeración de fases (1-6),
+está desplegado y qué falta. Usa su propia numeración de fases (1-10),
 independiente de la de `ROADMAP.md` (que trackea features del producto).
 
 ---
@@ -9,19 +9,21 @@ independiente de la de `ROADMAP.md` (que trackea features del producto).
 ## Estado actual (resumen ejecutivo)
 
 **Fases completadas (implementadas y probadas contra emulador):** 1, 2, 3,
-4, 4.1, 5, 5.1, 6, 7, 8, 9 — modelo de plan en Firestore, helper central de
-estado de plan, banner visual, modo solo lectura en la UI, sincronización en
-tiempo real del negocio, enforcement real en Firestore Rules (incluido el
+4, 4.1, 5, 5.1, 6, 7, 8, 9, 10 — modelo de plan en Firestore, helper central
+de estado de plan, banner visual, modo solo lectura en la UI, sincronización
+en tiempo real del negocio, enforcement real en Firestore Rules (incluido el
 documento raíz del negocio), panel admin móvil interno con Cloud Functions
 callable, contacto/activación manual (link a soporte en banner, modal de
-bloqueo y Configuración), libreta de cobros administrativa (Fase 8), y
-limpieza/rediseño visual del panel admin (Fase 9, solo UI).
+bloqueo y Configuración), libreta de cobros administrativa (Fase 8),
+limpieza/rediseño visual del panel admin (Fase 9, solo UI), y eliminación
+definitiva de cuenta ejecutada por el admin desde el panel (Fase 10).
 
 **Qué está desplegado hoy:**
 - Firebase Blaze activo en el proyecto.
 - `firestore.rules` desplegadas (incluye el enforcement de planes de Fase 5/5.1 y el bloqueo de `adminAuditLogs` de Fase 6) — **sin incluir todavía** el bloqueo explícito de `adminBilling` de Fase 8, ver más abajo.
 - `firestore.indexes.json` desplegados.
 - Las 5 Cloud Functions del panel admin (Fase 6) desplegadas. Las 3 Cloud Functions de la libreta de cobros (Fase 8: `adminGetBillingDetail`, `adminRecordPayment`, `adminUpdateBillingNotes`) **no están desplegadas todavía** — implementadas y con tests locales, pendiente de tu autorización de deploy.
+- Las 2 Cloud Functions de eliminación definitiva de cuenta (Fase 10: `adminGetDeletionPreview`, `adminDeleteRequestedAccount`) **tampoco están desplegadas** — mismo estado que Fase 8: implementadas, con tests locales, pendiente de deploy. No requieren cambios en `firestore.rules` ni en `firestore.indexes.json`.
 - Custom claim `admin: true` ya asignado a la cuenta administradora.
 
 Detalle de credenciales, procedimiento de deploy y operación:
@@ -38,7 +40,7 @@ desplegó.
 - Mercado Pago: no implementado.
 - Panel web: no existe todavía (el panel admin es 100% móvil, dentro de la APK).
 - Multi-usuario por negocio: no existe (1 usuario : 1 negocio).
-- Procesamiento automático de `deletionRequest`: no existe — sigue siendo manual por soporte.
+- Procesamiento de `deletionRequest`: ya no es 100% manual (Fase 10 agregó `adminGetDeletionPreview`/`adminDeleteRequestedAccount` para que el admin lo ejecute desde el panel, con revisión y confirmación) — pero sigue siendo una acción manual y deliberada del admin, no automática, y esas dos Cloud Functions todavía no están desplegadas (ver arriba).
 - Backup propio / restauración administrada: no existe (se depende de la infraestructura de Firebase).
 - Exportación en CSV: no existe (solo JSON completo).
 - Soporte/chat/push: no existe (Fase 7 agregó un link de contacto a la web, no un chat en vivo ni notificaciones push).
@@ -1602,3 +1604,129 @@ Rules, ni de Functions, ni de modelos. Todo lo de acá es UI de
 `tsc --noEmit` y `npm run test:unit` (21/21) verificados después de cada
 cambio de esta fase — sin tests propios nuevos (es UI pura, sin lógica que
 testear con `node:test`).
+
+---
+
+## Fase 10 — Eliminación definitiva de cuenta (admin)
+
+Cierra el gap que quedaba abierto desde que `deletionRequest` existe
+(Fase 5.1): el cliente podía **solicitar** el borrado de forma no
+destructiva, pero el borrado real seguía siendo 100% manual — editar
+Firebase Console a mano, sin registro, sin protección contra borrar el
+negocio equivocado. Ahora el admin ve la solicitud (dashboard, lista de
+negocios, detalle) y la ejecuta desde el panel, con revisión previa y
+confirmación fuerte. **El cliente sigue sin poder borrar nada directo** —
+`firestore.rules` no cambió en esta fase, ver más abajo.
+
+### Decisión de diseño: sin cola de jobs (`adminDeletionJobs`)
+
+Los datos de un solo negocio (productos, clientes, movimientos, cajas de un
+comercio de barrio) son volumen chico. `db.recursiveDelete()` del Admin SDK
+—borra un documento y todas sus subcolecciones recursivamente, maneja la
+paginación internamente— alcanza de sobra dentro de una sola Cloud Function
+callable con `timeoutSeconds: 120`. Construir una cola de jobs con estados
+`processing/completed/failed` hubiera sido infraestructura nueva para un
+volumen que no la necesita — se documenta la alternativa acá por si el
+volumen real cambia en el futuro, no porque haga falta hoy.
+
+### Cloud Functions nuevas (`functions/index.js`)
+
+Mismo portero que las de Fase 6/8 (`request.auth.token.admin === true`):
+
+- **`adminGetDeletionPreview({ businessId })`** — de solo lectura, no borra
+  nada. Exige que el negocio exista y tenga `deletionRequest`; devuelve
+  nombre, email, fecha de solicitud, `businessId`, si existe cuenta de
+  Firebase Auth, y conteos (`computeDeletionCounts`, aggregation queries —
+  nunca lee productos/clientes/movimientos reales, solo sus tamaños).
+- **`adminDeleteRequestedAccount({ businessId, confirmation })`** — borra
+  `businesses/{id}` (+ `products`/`categories`/`customers`+`movements`/
+  `cashSessions`+`cashMovements` vía `recursiveDelete`), `adminBilling/{id}`
+  (+ `payments`), `users/{id}` y elimina la cuenta de Firebase Auth
+  (`deleteUser` — decisión explícita: borrado real, no `disabled: true`).
+  Exige `deletionRequest` previo y que `confirmation` coincida
+  (case-insensitive) con el email del dueño leído de `users/{id}` en el
+  momento de la llamada — nunca confía en un valor "esperado" mandado por
+  el cliente. `timeoutSeconds: 120`.
+
+### Reintento seguro, sin cola de jobs
+
+Antes de borrar nada, se escribe un log `delete_account_requested_execute`
+en `adminAuditLogs`. Si una ejecución posterior encuentra que el negocio ya
+no existe, busca ese mismo log por `businessId` (mismo índice compuesto
+`businessId + createdAt` ya desplegado, sin `where...in` para no requerir
+uno nuevo): si el más reciente es `delete_account_completed`, devuelve
+éxito idempotente sin volver a tocar nada; si es
+`delete_account_requested_execute` sin `completed` posterior, retoma el
+borrado (cada paso —`recursiveDelete`, `usersRef.delete()`,
+`deleteAuthUserIfExists`— es no-op seguro sobre lo que ya esté borrado). Sin
+ese log previo para ese `businessId` exacto, `not-found` — no hay forma de
+usar el historial de un negocio para borrar otro.
+
+### Auditoría
+
+Reutiliza `adminAuditLogs` (misma colección de Fase 6/8) — tres `action`
+nuevos: `delete_account_requested_execute`, `delete_account_completed`
+(incluye `deletedCounts`, los mismos conteos del preview), y
+`delete_account_failed` (incluye `error`, mensaje de SDK truncado a 300
+caracteres). Nunca se guarda nombre, email, monto, ni contenido de
+caja/fiados/productos — solo números.
+
+### Firestore Rules — sin cambios
+
+`businesses/{businessId}` y `users/{uid}` ya denegaban `delete` a cualquier
+cliente desde Fase 5.1 (para evitar justamente el borrado no atómico que
+motivó esa decisión); `adminAuditLogs`/`adminBilling` ya eran `allow read,
+write: if false` desde Fase 6/8. Las dos Cloud Functions nuevas usan el
+Admin SDK, que ignora las Rules por completo — no se creó ninguna colección
+nueva alcanzable por el cliente, así que no había nada que debilitar ni
+nada nuevo que denegar explícitamente.
+
+### Panel admin (móvil)
+
+- **Lista de negocios:** ícono de aviso (`alert-circle-outline`, tono
+  danger) en los negocios con `deletionRequest` pendiente — aditivo, no
+  reemplaza el badge de plan existente.
+- **Dashboard:** el contador "solicitudes de eliminación" ya existía desde
+  Fase 9 dentro del banner "Atención" — no hizo falta agregar nada nuevo.
+- **Detalle de negocio:** nueva sección "ZONA DE ELIMINACIÓN", visible solo
+  si hay `deletionRequest`, separada visualmente de "ACCIONES" (no se
+  mezcla con activar Pro/solo lectura/suspender/billing). Un único botón
+  "Eliminar cuenta definitivamente" abre un modal de dos pasos: revisión
+  (nombre, email, fecha, `businessId`, conteos) → confirmación (escribir el
+  email exacto del dueño; el botón de borrado queda deshabilitado hasta que
+  coincide). Al completar, navega de vuelta a la lista de negocios — el
+  detalle ya no tiene nada que mostrar.
+
+### Tests
+
+- `scripts/functions-tests/admin-account-deletion.test.mjs` (nuevo, 10
+  tests): portero admin en ambas funciones; preview rechaza sin
+  `deletionRequest` o si el negocio no existe; preview devuelve conteos
+  correctos sin borrar nada; delete rechaza sin `deletionRequest` y con
+  confirmación incorrecta (sin borrar nada en ningún caso); delete borra
+  Firestore + Auth y deja auditoría con `deletedCounts`; delete rechaza
+  `not-found` para un `businessId` que nunca existió; reintento tras
+  completado devuelve éxito idempotente sin duplicar el log.
+- `scripts/rules-tests/*`: sin tests nuevos — no se creó ninguna colección
+  alcanzable por el cliente. Se corrió la suite completa (92/92) para
+  confirmar que no hay regresión.
+- `package.json`: `test:functions` pasó a correr con
+  `--test-concurrency=1` — al agregar un segundo archivo de tests de
+  Functions, ambos comparten el mismo proyecto de emulador (a diferencia
+  de Rules, Functions no soporta multi-proyecto vía
+  `initializeTestEnvironment`), así que podían pisarse si `node --test`
+  los corría en paralelo.
+
+### Qué NO se hizo (respetando el alcance)
+
+- No se creó cola de jobs (`adminDeletionJobs`) — ver "Decisión de diseño"
+  arriba.
+- No se tocó `firestore.rules` — ver arriba.
+- No se tocó Caja, Fiados, Productos ni ninguna lógica comercial del
+  cliente, salvo el borrado en sí mismo dentro de `adminDeleteRequestedAccount`.
+- No se deshabilitó la cuenta de Firebase Auth como alternativa a
+  borrarla — decisión explícita, ver "Cloud Functions nuevas" arriba.
+- No se desplegó nada (Rules no cambiaron; las 2 Cloud Functions nuevas
+  están implementadas y con tests locales, pendientes de deploy junto con
+  las de Fase 8, ver "Estado actual" al inicio del documento).
+- No se generó APK.

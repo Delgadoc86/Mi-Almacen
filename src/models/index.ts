@@ -185,6 +185,10 @@ export type AdminAuditLogEntry = {
   // update_billing_notes) — null en entradas de cambio de plan.
   previousBilling: AdminBillingSummary | null;
   nextBilling: AdminBillingSummary | null;
+  // Presentes únicamente en entradas de eliminación definitiva de cuenta
+  // (delete_account_completed/delete_account_failed) — null en el resto.
+  deletedCounts: AdminDeletionCounts | null;
+  error: string | null;
   createdAt: string | null;
 };
 
@@ -246,10 +250,39 @@ export type AdminBillingDetail = {
 
 export type AdminBillingAction = 'record_payment' | 'update_billing_notes';
 
-// Acción registrada en adminAuditLogs — puede ser un cambio de plan (acceso)
-// o una acción de billing (administración comercial). Mismo documento/
-// colección, campos previous/next distintos según cuál de los dos sea.
-export type AdminAuditAction = AdminChangePlanAction | AdminBillingAction;
+export type AdminAccountDeletionAction =
+  | 'delete_account_requested_execute'
+  | 'delete_account_completed'
+  | 'delete_account_failed';
+
+// Acción registrada en adminAuditLogs — puede ser un cambio de plan (acceso),
+// una acción de billing (administración comercial) o un paso de eliminación
+// definitiva de cuenta. Mismo documento/colección, campos previous/next (o
+// deletedCounts/error) distintos según cuál de los tres sea.
+export type AdminAuditAction = AdminChangePlanAction | AdminBillingAction | AdminAccountDeletionAction;
+
+// ── Eliminación definitiva de cuenta (adminGetDeletionPreview /
+// adminDeleteRequestedAccount) — solo alcanzable si el negocio ya tiene
+// `deletionRequest` (solicitado por el propio dueño desde Configuración).
+export type AdminDeletionCounts = {
+  products: number;
+  categories: number;
+  customers: number;
+  movements: number;
+  cashSessions: number;
+  cashMovements: number;
+  hasBilling: boolean;
+  billingPayments: number;
+};
+
+export type AdminDeletionPreview = {
+  businessId: string;
+  name: string;
+  ownerEmail: string;
+  requestedAt: string | null;
+  counts: AdminDeletionCounts;
+  authUserExists: boolean;
+};
 
 export type Business = {
   id: string;

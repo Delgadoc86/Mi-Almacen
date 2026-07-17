@@ -1,6 +1,6 @@
 {
   "name": "minegocio",
-  "version": "1.5.0",
+  "version": "1.5.5",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",
@@ -40,7 +40,7 @@
     "emulators": "firebase emulators:start --only firestore,auth,functions",
     "test:rules": "node --test scripts/rules-tests/*.test.mjs",
     "test:rules:emulator": "firebase emulators:exec --only firestore,auth \"npm run test:rules\"",
-    "test:functions": "node --test scripts/functions-tests/*.test.mjs",
+    "test:functions": "node --test --test-concurrency=1 scripts/functions-tests/*.test.mjs",
     "test:functions:emulator": "firebase emulators:exec --only functions,firestore,auth \"npm run test:functions\"",
     "test:unit": "node --experimental-strip-types --test src/utils/*.test.ts"
   },

@@ -31,6 +31,15 @@ sección "Cobro" hasta que corra `firebase deploy --only firestore:rules,functio
 (las queries nuevas son de campo único o reusan el índice compuesto ya
 desplegado de `adminAuditLogs`).
 
+**También pendiente de deploy:** las 2 Cloud Functions de eliminación
+definitiva de cuenta (`adminGetDeletionPreview`, `adminDeleteRequestedAccount`,
+`functions/index.js`, Fase 10) — implementadas y con tests locales, mismo
+estado que la libreta de cobros. No requieren ningún cambio en
+`firestore.rules` ni en `firestore.indexes.json` (usan el Admin SDK, que
+ignora las Rules, y reutilizan el índice compuesto de `adminAuditLogs` ya
+desplegado). Hasta que se desplieguen, el botón "Eliminar cuenta
+definitivamente" del panel admin no va a funcionar.
+
 Para el detalle de qué se implementó en cada fase (arquitectura, archivos,
 tests), ver `docs/SAAS_ROADMAP.md`.
 
@@ -129,6 +138,7 @@ Firebase emite un token nuevo.
 
 - **No editar el campo `plan` de un negocio manualmente** (Firestore Console, script ad-hoc) salvo pruebas controladas y puntuales — el camino real para cambiar el plan de una cuenta es el panel admin (`adminChangePlan`), que deja auditoría en `adminAuditLogs`. Una edición manual no queda registrada en ningún lado.
 - **No editar `adminBilling/{businessId}` manualmente** por el mismo motivo — usar siempre "Registrar pago" o la edición de notas desde el panel admin (`adminRecordPayment`/`adminUpdateBillingNotes`), que dejan auditoría. Recordar que `adminBilling` es administración comercial, no plan: registrar un pago **nunca** activa Pro ni cambia el acceso del negocio por sí solo — esa sigue siendo una acción separada y manual (`adminChangePlan`) que el admin decide después de ver el estado de cobro.
+- **No borrar cuentas manualmente desde Firebase Console** (Firestore ni Authentication), ni siquiera cuando el cliente ya solicitó la eliminación. El camino real es "Eliminar cuenta definitivamente" desde el detalle del negocio en el panel admin (`adminDeleteRequestedAccount`, Fase 10) — exige que exista `deletionRequest`, revisión previa con conteos, confirmación exacta del email del dueño, y deja auditoría en `adminAuditLogs`. Un borrado manual en Console no queda registrado en ningún lado y no tiene ninguna de esas protecciones contra borrar el negocio equivocado.
 - **No desplegar Rules ni Functions desde una cuenta de Firebase CLI equivocada.** Verificar con `firebase projects:list` que la cuenta logueada tiene acceso al proyecto antes de cualquier `firebase deploy`.
 - Los scripts privilegiados (`bootstrap-admin.mjs`, `migrate-existing-plans.mjs`) son dry-run por defecto — nunca escriben nada salvo que se pase `--apply` explícitamente.
 

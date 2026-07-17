@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmountDisplay, Button, Card, Chip, InlineMessage, TextField, Toast } from '@/components/ui';
 import { theme } from '@/theme';
-import { getAdminBusinessDetail, changeAdminPlan, getAdminBillingDetail, recordAdminPayment } from '@/services/admin';
+import {
+  getAdminBusinessDetail,
+  changeAdminPlan,
+  getAdminBillingDetail,
+  recordAdminPayment,
+  getAdminDeletionPreview,
+  deleteAdminRequestedAccount,
+} from '@/services/admin';
 import type {
   AdminBusinessDetail,
   AdminChangePlanAction,
@@ -13,6 +20,7 @@ import type {
   AdminBillingDetail,
   AdminBillingMethod,
   AdminBillingStatus,
+  AdminDeletionPreview,
 } from '@/models';
 
 const KIND_LABEL: Record<AdminPlanKind, string> = {
@@ -59,7 +67,20 @@ const ACTION_LABEL: Record<AdminAuditAction, string> = {
   reactivate: 'Reactivar',
   record_payment: 'Registrar pago',
   update_billing_notes: 'Actualizar nota de cobro',
+  delete_account_requested_execute: 'Eliminación de cuenta: inicio',
+  delete_account_completed: 'Cuenta eliminada definitivamente',
+  delete_account_failed: 'Eliminación de cuenta: falló',
 };
+
+const DELETION_COUNT_ROWS: { key: keyof AdminDeletionPreview['counts']; label: string }[] = [
+  { key: 'products', label: 'Productos' },
+  { key: 'categories', label: 'Categorías' },
+  { key: 'customers', label: 'Clientes' },
+  { key: 'movements', label: 'Movimientos de fiado' },
+  { key: 'cashSessions', label: 'Sesiones de caja' },
+  { key: 'cashMovements', label: 'Movimientos de caja' },
+  { key: 'billingPayments', label: 'Pagos registrados (billing)' },
+];
 
 const REASON_REQUIRED: Record<AdminChangePlanAction, boolean> = {
   activate_pro: false,
@@ -130,6 +151,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 export default function AdminBusinessDetailScreen() {
+  const router = useRouter();
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const [detail, setDetail] = useState<AdminBusinessDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,6 +177,18 @@ export default function AdminBusinessDetailScreen() {
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Eliminación definitiva de cuenta — acción excepcional y destructiva,
+  // deliberadamente separada del flujo de acciones de plan de arriba. Dos
+  // pasos dentro del mismo modal: 'preview' (revisión + conteos) y 'confirm'
+  // (escribir el email exacto del dueño).
+  const [deletionStep, setDeletionStep] = useState<'closed' | 'preview' | 'confirm'>('closed');
+  const [deletionPreview, setDeletionPreview] = useState<AdminDeletionPreview | null>(null);
+  const [deletionPreviewLoading, setDeletionPreviewLoading] = useState(false);
+  const [deletionPreviewError, setDeletionPreviewError] = useState<string | null>(null);
+  const [deletionConfirmText, setDeletionConfirmText] = useState('');
+  const [deletionSubmitting, setDeletionSubmitting] = useState(false);
+  const [deletionError, setDeletionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -268,6 +302,52 @@ export default function AdminBusinessDetailScreen() {
       setSubmitting(false);
     }
   }
+
+  async function openDeletionPreview() {
+    if (!businessId) return;
+    setDeletionStep('preview');
+    setDeletionPreview(null);
+    setDeletionPreviewError(null);
+    setDeletionConfirmText('');
+    setDeletionError(null);
+    setDeletionPreviewLoading(true);
+    try {
+      const preview = await getAdminDeletionPreview(businessId);
+      setDeletionPreview(preview);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo cargar la revisión de eliminación.';
+      setDeletionPreviewError(msg);
+    } finally {
+      setDeletionPreviewLoading(false);
+    }
+  }
+
+  function closeDeletionModal() {
+    if (deletionSubmitting) return;
+    setDeletionStep('closed');
+  }
+
+  async function handleConfirmDeletion() {
+    if (!businessId || !deletionPreview) return;
+    setDeletionSubmitting(true);
+    setDeletionError(null);
+    try {
+      await deleteAdminRequestedAccount({ businessId, confirmation: deletionConfirmText.trim() });
+      setDeletionStep('closed');
+      setToastMessage('Cuenta eliminada definitivamente.');
+      setToastVisible(true);
+      router.replace('/admin/businesses');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo eliminar la cuenta.';
+      setDeletionError(msg);
+    } finally {
+      setDeletionSubmitting(false);
+    }
+  }
+
+  const deletionConfirmMatches =
+    !!deletionPreview?.ownerEmail &&
+    deletionConfirmText.trim().toLowerCase() === deletionPreview.ownerEmail.trim().toLowerCase();
 
   if (loading) {
     return (
@@ -403,7 +483,105 @@ export default function AdminBusinessDetailScreen() {
             ))}
           </Card>
         )}
+
+        {detail.deletionRequestedAt ? (
+          <>
+            <Text style={styles.sectionLabel}>ZONA DE ELIMINACIÓN</Text>
+            <Card style={[styles.card, styles.dangerZoneCard]}>
+              <Text style={styles.dangerZoneText}>
+                Este cliente solicitó eliminar su cuenta. Esta acción borra todos sus datos de forma
+                permanente y no se puede deshacer.
+              </Text>
+              <Button
+                label="Eliminar cuenta definitivamente"
+                variant="danger"
+                onPress={openDeletionPreview}
+                style={styles.dangerZoneBtn}
+              />
+            </Card>
+          </>
+        ) : null}
       </ScrollView>
+
+      <Modal visible={deletionStep !== 'closed'} transparent animationType="fade" onRequestClose={closeDeletionModal}>
+        <Pressable style={modalStyles.overlay} onPress={closeDeletionModal}>
+          <Pressable style={modalStyles.card} onPress={(e) => e.stopPropagation()}>
+            {deletionStep === 'preview' ? (
+              <>
+                <Text style={modalStyles.title}>Revisar antes de eliminar</Text>
+                {deletionPreviewLoading ? (
+                  <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
+                ) : deletionPreviewError ? (
+                  <InlineMessage variant="error" text={deletionPreviewError} />
+                ) : deletionPreview ? (
+                  <>
+                    <ScrollView style={modalStyles.previewScroll} showsVerticalScrollIndicator={false}>
+                      <InfoRow label="Negocio" value={deletionPreview.name} />
+                      <InfoRow label="Email" value={deletionPreview.ownerEmail || '—'} />
+                      <InfoRow label="Solicitado" value={formatDateTime(deletionPreview.requestedAt)} />
+                      <InfoRow label="Cuenta Auth" value={deletionPreview.authUserExists ? 'Existe' : 'No existe'} />
+                      <Text style={styles.uidCaption}>businessId: {deletionPreview.businessId}</Text>
+
+                      <Text style={[styles.infoLabel, styles.deleteCountsLabel]}>SE VA A BORRAR</Text>
+                      {DELETION_COUNT_ROWS.map((row) => (
+                        <InfoRow
+                          key={row.key}
+                          label={row.label}
+                          value={String(deletionPreview.counts[row.key])}
+                        />
+                      ))}
+                    </ScrollView>
+
+                    <View style={modalStyles.actions}>
+                      <Button label="Cancelar" variant="ghost" onPress={closeDeletionModal} style={modalStyles.actionBtn} />
+                      <Button
+                        label="Continuar"
+                        variant="danger"
+                        onPress={() => setDeletionStep('confirm')}
+                        style={modalStyles.actionBtn}
+                      />
+                    </View>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={modalStyles.title}>Confirmar eliminación</Text>
+                <Text style={modalStyles.message}>
+                  Escribí exactamente el email &quot;{deletionPreview?.ownerEmail}&quot; para confirmar. Esta
+                  acción es permanente y no se puede deshacer.
+                </Text>
+                <TextField
+                  label="Email de confirmación"
+                  value={deletionConfirmText}
+                  onChangeText={setDeletionConfirmText}
+                  placeholder={deletionPreview?.ownerEmail ?? ''}
+                  autoCapitalize="none"
+                  containerStyle={modalStyles.reasonField}
+                />
+                {deletionError ? <Text style={modalStyles.error}>{deletionError}</Text> : null}
+                <View style={modalStyles.actions}>
+                  <Button
+                    label="Volver"
+                    variant="ghost"
+                    onPress={() => setDeletionStep('preview')}
+                    style={modalStyles.actionBtn}
+                    disabled={deletionSubmitting}
+                  />
+                  <Button
+                    label="Eliminar definitivamente"
+                    variant="danger"
+                    onPress={handleConfirmDeletion}
+                    loading={deletionSubmitting}
+                    disabled={!deletionConfirmMatches}
+                    style={modalStyles.actionBtn}
+                  />
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={pendingAction !== null} transparent animationType="fade" onRequestClose={closeAction}>
         <Pressable style={modalStyles.overlay} onPress={closeAction}>
@@ -578,6 +756,13 @@ const styles = StyleSheet.create({
   historyDate: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.micro, color: theme.colors.muted },
   paymentAmountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   paymentMethodText: { fontFamily: theme.fontFamily.semibold, fontSize: theme.font.body, color: theme.colors.textSecondary },
+  dangerZoneCard: { borderWidth: 1.5, borderColor: theme.colors.dangerMid },
+  dangerZoneText: {
+    fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.textSecondary,
+    lineHeight: 18, marginBottom: theme.spacing.lg,
+  },
+  dangerZoneBtn: { marginTop: 4 },
+  deleteCountsLabel: { marginTop: theme.spacing.md, marginBottom: 4 },
 });
 
 const modalStyles = StyleSheet.create({
@@ -596,4 +781,5 @@ const modalStyles = StyleSheet.create({
   error: { fontFamily: theme.fontFamily.medium, fontSize: theme.font.caption, color: theme.colors.error, marginBottom: theme.spacing.md },
   actions: { flexDirection: 'row', gap: 12, marginTop: theme.spacing.sm },
   actionBtn: { flex: 1 },
+  previewScroll: { maxHeight: 380 },
 });

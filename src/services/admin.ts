@@ -10,6 +10,8 @@ import type {
   AdminBillingDetail,
   AdminBillingSummary,
   AdminBillingMethod,
+  AdminDeletionPreview,
+  AdminDeletionCounts,
 } from '@/models';
 
 // Capa fina sobre las Cloud Functions callable de functions/index.js (Fase 6).
@@ -109,6 +111,31 @@ export async function updateAdminBillingNotes(params: {
     functions,
     'adminUpdateBillingNotes',
   );
+  const res = await fn(params);
+  return res.data;
+}
+
+// ── Eliminación definitiva de cuenta — solo alcanzable si el negocio ya
+// tiene deletionRequest (solicitado por el propio dueño). El cliente nunca
+// borra nada directamente; estas dos funciones son el único camino real.
+
+export async function getAdminDeletionPreview(businessId: string): Promise<AdminDeletionPreview> {
+  const fn = httpsCallable<{ businessId: string }, AdminDeletionPreview>(
+    functions,
+    'adminGetDeletionPreview',
+  );
+  const res = await fn({ businessId });
+  return res.data;
+}
+
+export async function deleteAdminRequestedAccount(params: {
+  businessId: string;
+  confirmation: string;
+}): Promise<{ success: boolean; alreadyDeleted: boolean; deletedCounts: AdminDeletionCounts | null }> {
+  const fn = httpsCallable<
+    typeof params,
+    { success: boolean; alreadyDeleted: boolean; deletedCounts: AdminDeletionCounts | null }
+  >(functions, 'adminDeleteRequestedAccount');
   const res = await fn(params);
   return res.data;
 }

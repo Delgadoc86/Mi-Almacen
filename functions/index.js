@@ -1,17 +1,21 @@
-// Backend del Panel Admin móvil interno (Fase 6). Cinco Cloud Functions
-// callable, todas detrás del mismo portero: exigen sesión de Firebase Auth
-// y el custom claim `admin === true` (asignado únicamente por
-// scripts/bootstrap-admin.mjs vía Admin SDK — ningún cliente puede
-// otorgárselo a sí mismo). Ningún cliente escribe `plan` de otro negocio
-// directamente en Firestore; todo cambio de plan pasa por acá, dentro de
-// una transacción que además deja un registro en `adminAuditLogs`.
+// Backend del Panel Admin móvil interno (Fase 6). Cloud Functions callable,
+// todas detrás del mismo portero: exigen sesión de Firebase Auth y el custom
+// claim `admin === true` (asignado únicamente por scripts/bootstrap-admin.mjs
+// vía Admin SDK — ningún cliente puede otorgárselo a sí mismo). Ningún
+// cliente escribe `plan` de otro negocio directamente en Firestore; todo
+// cambio de plan pasa por acá, dentro de una transacción que además deja un
+// registro en `adminAuditLogs`.
 //
-// Deliberadamente NO tocan: products, categories, customers, movements,
-// cashSessions, cashMovements — el panel admin nunca lee ni escribe datos
-// operativos/financieros de un negocio, solo su estado de cuenta.
+// Deliberadamente NO leen ni exponen al admin el contenido de products,
+// categories, customers, movements, cashSessions, cashMovements — el panel
+// admin nunca ve datos operativos/financieros de un negocio, solo su estado
+// de cuenta. Única excepción: adminDeleteRequestedAccount, que SÍ borra esas
+// subcolecciones (nunca las lee/expone) al ejecutar una eliminación
+// definitiva ya solicitada por el propio dueño — ver esa función más abajo.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const { classifyPlan, KIND } = require('./planStatus');
 
 initializeApp();
@@ -75,6 +79,10 @@ function serializeAuditLog(doc) {
     nextPlan: data.nextPlan ?? null,
     previousBilling: data.previousBilling ?? null,
     nextBilling: data.nextBilling ?? null,
+    // Presentes únicamente en entradas de eliminación definitiva de cuenta
+    // (delete_account_completed/delete_account_failed) — null en el resto.
+    deletedCounts: data.deletedCounts ?? null,
+    error: data.error ?? null,
     createdAt: tsToIso(data.createdAt),
   };
 }
@@ -627,4 +635,203 @@ exports.adminUpdateBillingNotes = onCall(async (request) => {
   });
 
   return { success: true, billing: serializeBilling(businessId, result.nextBilling) };
+});
+
+// ── Eliminación definitiva de cuenta ─────────────────────────────────────
+// El cliente solo puede "solicitar" eliminación (deletionRequest, ver
+// firestore.rules e isNewDeletionRequestOnly()) — nunca borra nada. El
+// borrado real de un negocio (Firestore + Auth) es exclusivamente admin,
+// acá, y exige que exista una solicitud previa más una confirmación exacta
+// del email del dueño. No toca ningún negocio sin deletionRequest.
+
+// Cuenta subcolecciones sin leer sus documentos (aggregation query) — usado
+// tanto en la previsualización como en el log final, para que el admin vea
+// exactamente lo que después queda auditado.
+async function computeDeletionCounts(businessId) {
+  const businessRef = db.collection('businesses').doc(businessId);
+  const billingRef = db.collection('adminBilling').doc(businessId);
+
+  const [productsCount, categoriesCount, customersCount, cashSessionsCount, customerRefs, sessionRefs, billingSnap] =
+    await Promise.all([
+      businessRef.collection('products').count().get(),
+      businessRef.collection('categories').count().get(),
+      businessRef.collection('customers').count().get(),
+      businessRef.collection('cashSessions').count().get(),
+      businessRef.collection('customers').listDocuments(),
+      businessRef.collection('cashSessions').listDocuments(),
+      billingRef.get(),
+    ]);
+
+  const [movementCounts, cashMovementCounts, paymentsCount] = await Promise.all([
+    Promise.all(customerRefs.map((ref) => ref.collection('movements').count().get())),
+    Promise.all(sessionRefs.map((ref) => ref.collection('cashMovements').count().get())),
+    billingSnap.exists ? billingRef.collection('payments').count().get() : null,
+  ]);
+
+  return {
+    products: productsCount.data().count,
+    categories: categoriesCount.data().count,
+    customers: customersCount.data().count,
+    movements: movementCounts.reduce((sum, snap) => sum + snap.data().count, 0),
+    cashSessions: cashSessionsCount.data().count,
+    cashMovements: cashMovementCounts.reduce((sum, snap) => sum + snap.data().count, 0),
+    hasBilling: billingSnap.exists,
+    billingPayments: paymentsCount ? paymentsCount.data().count : 0,
+  };
+}
+
+async function deleteAuthUserIfExists(uid) {
+  try {
+    await getAuth().deleteUser(uid);
+    return true;
+  } catch (err) {
+    if (err && err.code === 'auth/user-not-found') return false;
+    throw err;
+  }
+}
+
+function summarizeError(err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.slice(0, 300);
+}
+
+// ── adminGetDeletionPreview ───────────────────────────────────────────────
+
+exports.adminGetDeletionPreview = onCall(async (request) => {
+  requireAdmin(request);
+
+  const businessId = request.data?.businessId;
+  if (typeof businessId !== 'string' || !businessId) {
+    throw new HttpsError('invalid-argument', 'Falta businessId.');
+  }
+
+  const [businessSnap, userSnap] = await Promise.all([
+    db.collection('businesses').doc(businessId).get(),
+    db.collection('users').doc(businessId).get(),
+  ]);
+
+  if (!businessSnap.exists) {
+    throw new HttpsError('not-found', 'No existe ese negocio.');
+  }
+
+  const business = businessSnap.data();
+  if (!business.deletionRequest) {
+    throw new HttpsError('failed-precondition', 'Este negocio no solicitó eliminación de cuenta.');
+  }
+
+  const user = userSnap.exists ? userSnap.data() : null;
+
+  const [counts, authUserExists] = await Promise.all([
+    computeDeletionCounts(businessId),
+    getAuth().getUser(businessId).then(() => true).catch(() => false),
+  ]);
+
+  return {
+    businessId,
+    name: business.name ?? '(sin nombre)',
+    ownerEmail: user?.email ?? '',
+    requestedAt: tsToIso(business.deletionRequest.requestedAt),
+    counts,
+    authUserExists,
+  };
+});
+
+// ── adminDeleteRequestedAccount ───────────────────────────────────────────
+// Borrado real y definitivo: businesses/{id} (+ products/categories/
+// customers+movements/cashSessions+cashMovements), adminBilling/{id}
+// (+ payments), users/{id} y la cuenta de Firebase Auth. Exige
+// deletionRequest previo + confirmación exacta del email del dueño. Es
+// reintentable: si una ejecución anterior quedó a mitad de camino (el
+// negocio ya no existe pero no hay log `delete_account_completed`), retoma
+// el borrado en vez de fallar — cada paso es no-op seguro sobre lo que ya
+// esté borrado.
+exports.adminDeleteRequestedAccount = onCall({ timeoutSeconds: 120 }, async (request) => {
+  requireAdmin(request);
+
+  const { businessId, confirmation } = request.data ?? {};
+  if (typeof businessId !== 'string' || !businessId) {
+    throw new HttpsError('invalid-argument', 'Falta businessId.');
+  }
+  if (typeof confirmation !== 'string' || !confirmation.trim()) {
+    throw new HttpsError('invalid-argument', 'Falta la confirmación.');
+  }
+
+  const businessRef = db.collection('businesses').doc(businessId);
+  const billingRef = db.collection('adminBilling').doc(businessId);
+  const usersRef = db.collection('users').doc(businessId);
+
+  const businessSnap = await businessRef.get();
+
+  if (businessSnap.exists) {
+    const business = businessSnap.data();
+    if (!business.deletionRequest) {
+      throw new HttpsError('failed-precondition', 'Este negocio no solicitó eliminación de cuenta.');
+    }
+
+    const userSnap = await usersRef.get();
+    const ownerEmail = userSnap.exists ? userSnap.data().email ?? '' : '';
+    if (!ownerEmail || confirmation.trim().toLowerCase() !== ownerEmail.trim().toLowerCase()) {
+      throw new HttpsError('invalid-argument', 'La confirmación no coincide con el email del dueño de la cuenta.');
+    }
+
+    // Deja rastro de que el borrado arrancó ANTES de tocar datos — si el
+    // proceso se corta acá abajo, el reintento sabe que debe retomar en vez
+    // de rechazar con not-found (ver más abajo).
+    await db.collection('adminAuditLogs').add({
+      actorUid: request.auth.uid,
+      businessId,
+      action: 'delete_account_requested_execute',
+      createdAt: Timestamp.now(),
+    });
+  } else {
+    // El negocio ya no existe: solo es válido si es el reintento de un
+    // borrado que ya arrancó (o ya terminó) para este mismo businessId.
+    const recentLogsSnap = await db
+      .collection('adminAuditLogs')
+      .where('businessId', '==', businessId)
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
+
+    const lastRelevant = recentLogsSnap.docs
+      .map((d) => d.data())
+      .find((d) => d.action === 'delete_account_completed' || d.action === 'delete_account_requested_execute');
+
+    if (!lastRelevant) {
+      throw new HttpsError('not-found', 'No existe ese negocio.');
+    }
+    if (lastRelevant.action === 'delete_account_completed') {
+      return { success: true, alreadyDeleted: true, deletedCounts: lastRelevant.deletedCounts ?? null };
+    }
+    // action === 'delete_account_requested_execute' sin 'completed' posterior
+    // → retomar el borrado abajo.
+  }
+
+  try {
+    const deletedCounts = await computeDeletionCounts(businessId);
+
+    await db.recursiveDelete(businessRef);
+    await db.recursiveDelete(billingRef);
+    await usersRef.delete();
+    await deleteAuthUserIfExists(businessId);
+
+    await db.collection('adminAuditLogs').add({
+      actorUid: request.auth.uid,
+      businessId,
+      action: 'delete_account_completed',
+      deletedCounts,
+      createdAt: Timestamp.now(),
+    });
+
+    return { success: true, alreadyDeleted: false, deletedCounts };
+  } catch (err) {
+    await db.collection('adminAuditLogs').add({
+      actorUid: request.auth.uid,
+      businessId,
+      action: 'delete_account_failed',
+      error: summarizeError(err),
+      createdAt: Timestamp.now(),
+    });
+    throw new HttpsError('internal', 'Ocurrió un error al eliminar. Podés reintentar.');
+  }
 });
