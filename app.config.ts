@@ -3,7 +3,7 @@ import { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'Mi Almacén',
   slug: 'mi-almacen',
-  version: '1.5.5',
+  version: '1.5.6',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'mialmacen',

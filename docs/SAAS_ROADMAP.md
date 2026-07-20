@@ -20,10 +20,9 @@ definitiva de cuenta ejecutada por el admin desde el panel (Fase 10).
 
 **Qué está desplegado hoy:**
 - Firebase Blaze activo en el proyecto.
-- `firestore.rules` desplegadas (incluye el enforcement de planes de Fase 5/5.1 y el bloqueo de `adminAuditLogs` de Fase 6) — **sin incluir todavía** el bloqueo explícito de `adminBilling` de Fase 8, ver más abajo.
+- `firestore.rules` desplegadas — incluye el enforcement de planes de Fase 5/5.1, el bloqueo de `adminAuditLogs` de Fase 6 y el bloqueo explícito de `adminBilling` de Fase 8 (desplegado 2026-07-20).
 - `firestore.indexes.json` desplegados.
-- Las 5 Cloud Functions del panel admin (Fase 6) desplegadas. Las 3 Cloud Functions de la libreta de cobros (Fase 8: `adminGetBillingDetail`, `adminRecordPayment`, `adminUpdateBillingNotes`) **no están desplegadas todavía** — implementadas y con tests locales, pendiente de tu autorización de deploy.
-- Las 2 Cloud Functions de eliminación definitiva de cuenta (Fase 10: `adminGetDeletionPreview`, `adminDeleteRequestedAccount`) **tampoco están desplegadas** — mismo estado que Fase 8: implementadas, con tests locales, pendiente de deploy. No requieren cambios en `firestore.rules` ni en `firestore.indexes.json`.
+- Las 10 Cloud Functions del panel admin están desplegadas: las 5 de Fase 6, las 3 de la libreta de cobros (Fase 8: `adminGetBillingDetail`, `adminRecordPayment`, `adminUpdateBillingNotes`) y las 2 de eliminación definitiva de cuenta (Fase 10: `adminGetDeletionPreview`, `adminDeleteRequestedAccount`) — las últimas 5 desplegadas 2026-07-20.
 - Custom claim `admin: true` ya asignado a la cuenta administradora.
 
 Detalle de credenciales, procedimiento de deploy y operación:
@@ -35,12 +34,11 @@ desplegó.
 
 **Qué falta (pendientes reales, sin maquillar):**
 - Validación manual end-to-end del panel admin móvil desde la APK real con `admin: true`.
-- Desplegar Fase 8 (Rules + las 3 Cloud Functions de billing) — ver arriba.
 - Cobro sigue siendo 100% manual — Fase 8 agrega una libreta para administrarlo (último pago, próximo cobro esperado, método, monto, notas), no automatiza nada: no hay corte automático por vencimiento, no hay cobro automático, no hay gateway.
 - Mercado Pago: no implementado.
 - Panel web: no existe todavía (el panel admin es 100% móvil, dentro de la APK).
 - Multi-usuario por negocio: no existe (1 usuario : 1 negocio).
-- Procesamiento de `deletionRequest`: ya no es 100% manual (Fase 10 agregó `adminGetDeletionPreview`/`adminDeleteRequestedAccount` para que el admin lo ejecute desde el panel, con revisión y confirmación) — pero sigue siendo una acción manual y deliberada del admin, no automática, y esas dos Cloud Functions todavía no están desplegadas (ver arriba).
+- Procesamiento de `deletionRequest`: ya no es manual — Fase 10 (desplegada) le da al admin un camino real desde el panel (`adminGetDeletionPreview`/`adminDeleteRequestedAccount`, con revisión y confirmación). Sigue siendo una acción deliberada del admin, no automática — no hay ningún proceso programado que borre cuentas solo.
 - Backup propio / restauración administrada: no existe (se depende de la infraestructura de Firebase).
 - Exportación en CSV: no existe (solo JSON completo).
 - Soporte/chat/push: no existe (Fase 7 agregó un link de contacto a la web, no un chat en vivo ni notificaciones push).
@@ -1514,8 +1512,9 @@ métricas de plan para no sugerir que afectan acceso.
 - No se agregó plan freemium ni planes adicionales.
 - No se mostró precio ni ningún dato de billing en la app del cliente —
   la libreta es 100% interna del panel admin.
-- No se desplegó nada (Rules ni Functions) — pendiente de autorización,
-  ver "Estado actual" al inicio del documento.
+
+**Deploy:** Rules y las 3 Cloud Functions desplegadas 2026-07-20 (junto con
+la Fase 10), ver "Estado actual" al inicio del documento.
 
 ---
 
@@ -1726,7 +1725,8 @@ nada nuevo que denegar explícitamente.
   cliente, salvo el borrado en sí mismo dentro de `adminDeleteRequestedAccount`.
 - No se deshabilitó la cuenta de Firebase Auth como alternativa a
   borrarla — decisión explícita, ver "Cloud Functions nuevas" arriba.
-- No se desplegó nada (Rules no cambiaron; las 2 Cloud Functions nuevas
-  están implementadas y con tests locales, pendientes de deploy junto con
-  las de Fase 8, ver "Estado actual" al inicio del documento).
 - No se generó APK.
+
+**Deploy:** las 2 Cloud Functions desplegadas 2026-07-20 (junto con la
+Fase 8) — `firestore.rules` no cambió en esta fase. Ver "Estado actual" al
+inicio del documento.

@@ -1,6 +1,6 @@
 {
   "name": "minegocio",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",

@@ -1398,3 +1398,66 @@ el Admin SDK, que ignora las Rules por completo, y no se creó ninguna
 colección nueva alcanzable por el cliente — no había nada que debilitar ni
 nada nuevo que denegar explícitamente.
 
+## Fase 19 — Un listener de Firestore por colección, no uno por pantalla
+
+Auditoría de consumo de lecturas/escrituras de Firestore, pensando en
+cuántos negocios puede soportar el proyecto antes de acercarse a la cuota
+gratis diaria (50.000 lecturas/20.000 escrituras). Cada negocio ya vivía
+aislado bajo `businesses/{businessId}/*` sin ningún `collectionGroup` desde
+el cliente, así que el consumo de un negocio no crece con la cantidad de
+negocios — pero dentro de un mismo negocio había una duplicación real.
+
+### Por qué `useProducts`/`useCustomers`/`useCashSession`/`useCategories` no seguían el patrón de `AuthContext`
+
+`AuthContext` ya tenía, desde Fase 4.1, un único listener de
+`businesses/{uid}` documentado explícitamente como "para que exista un solo
+listener en toda la app". Los otros cuatro hooks nunca siguieron ese mismo
+criterio: cada uno abría su propio `onSnapshot` dentro de su propio
+`useEffect`, sin ningún estado compartido entre pantallas. Como los tabs de
+Expo Router quedan montados después de la primera visita (no se
+desmontan al cambiar de tab), un negocio con catálogo e historial reales
+terminaba con listeners duplicados leyendo la misma colección completa:
+productos se releía en Inicio + Productos + PDF + Lista de precios;
+clientes en Inicio + Fiados; la sesión de caja en Inicio + Caja. Y
+`firebase.ts` inicializa Firestore con `getFirestore()` simple, sin
+`persistentLocalCache` — no hay caché offline que amortigüe esos
+remontajes, cada uno vuelve a pegarle al servidor.
+
+### Por qué la solución es un Context nuevo y no un cambio a cada hook
+
+Se evaluó parchear cada hook por separado (ej. un caché en memoria por
+`businessId` fuera de React) y se descartó: React ya tiene el mecanismo
+correcto para "un dato, muchos consumidores" — Context — y `AuthContext`
+ya probaba que el patrón funciona bien en este proyecto. Se creó
+`BusinessDataProvider` (`src/context/BusinessDataContext.tsx`) con los
+cuatro listeners reales, montado una única vez en `app/(app)/_layout.tsx`
+(mismo lugar que ya monta `OfflineBanner` una sola vez para toda el área
+autenticada). `useProducts`, `useCustomers`, `useCashSession` y
+`useCategories` pasaron a ser wrappers de una línea que leen de ese
+Context — devuelven exactamente el mismo shape que devolvían antes
+(`{ products, loading, error, retry }`, etc.), así que ninguna de las 13
+pantallas que los consumen necesitó cambiar una sola línea.
+
+### Por qué `useCategories` conservó su paso de `getOrSeedCategories`
+
+El hook original corría `getOrSeedCategories` (crea las categorías por
+defecto si el negocio todavía no tiene ninguna) antes de suscribirse, no en
+paralelo. `useCategoriesResource` dentro del Context reproduce exactamente
+esa misma secuencia — solo se movió de lugar, no se le cambió el
+comportamiento. Es el único de los cuatro que no reusa el helper genérico
+`useSubscribedResource`, precisamente por este paso extra.
+
+### Qué NO se hizo
+
+- No se tocó ninguna Cloud Function ni `firestore.rules` — es un cambio
+  100% del cliente, sobre cómo se suscribe a datos que ya podía leer.
+- No se agregó caché offline de Firestore (`persistentLocalCache`) — se
+  evaluó pero es un cambio de mayor alcance (afecta comportamiento sin
+  conexión en todas las pantallas) que el problema puntual de esta fase no
+  necesitaba para resolverse.
+- `useCustomer`, `useCustomerMovements`, `useCashMovements`, `useCashHistory`
+  no se tocaron — están parametrizados por id/sesión/límite, así que no se
+  duplican entre pantallas de la misma forma (cada uno ya es específico de
+  una sola pantalla a la vez).
+- No se generó APK ni se hizo deploy — no había nada que desplegar.
+

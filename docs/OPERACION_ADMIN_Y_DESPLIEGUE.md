@@ -17,28 +17,16 @@ Nunca se usan datos reales en los ejemplos de este documento. Reemplazar:
 - Firebase Blaze está activo en el proyecto.
 - Firestore Rules (`firestore.rules`) están desplegadas.
 - Los índices de Firestore (`firestore.indexes.json`) están desplegados.
-- Las 5 Cloud Functions del panel admin (`adminGetDashboard`, `adminListBusinesses`, `adminGetBusinessDetail`, `adminChangePlan`, `adminListAuditLogs`) están desplegadas.
+- Las 10 Cloud Functions del panel admin están desplegadas: las 5 de Fase 6
+  (`adminGetDashboard`, `adminListBusinesses`, `adminGetBusinessDetail`,
+  `adminChangePlan`, `adminListAuditLogs`), las 3 de la libreta de cobros
+  de Fase 8 (`adminGetBillingDetail`, `adminRecordPayment`,
+  `adminUpdateBillingNotes`) y las 2 de eliminación definitiva de cuenta de
+  Fase 10 (`adminGetDeletionPreview`, `adminDeleteRequestedAccount`) —
+  estas últimas 5, desplegadas 2026-07-20 junto con la regla explícita
+  `adminBilling/{document=**}` en `firestore.rules`.
 - La política de limpieza de imágenes de build de Cloud Functions quedó configurada a 30 días (evita acumulación de artefactos de builds anteriores).
 - La cuenta administradora ya tiene el custom claim `admin: true` asignado.
-
-**Pendiente de deploy:** las 3 Cloud Functions de la libreta de cobros
-(`adminGetBillingDetail`, `adminRecordPayment`, `adminUpdateBillingNotes`,
-`functions/index.js`) y la regla explícita `adminBilling/{document=**}` en
-`firestore.rules` están escritas y con tests locales, pero **no se
-desplegaron todavía** — el panel admin de la app no va a poder usar la
-sección "Cobro" hasta que corra `firebase deploy --only firestore:rules,functions`
-(ver el procedimiento más abajo). No requieren cambios en `firestore.indexes.json`
-(las queries nuevas son de campo único o reusan el índice compuesto ya
-desplegado de `adminAuditLogs`).
-
-**También pendiente de deploy:** las 2 Cloud Functions de eliminación
-definitiva de cuenta (`adminGetDeletionPreview`, `adminDeleteRequestedAccount`,
-`functions/index.js`, Fase 10) — implementadas y con tests locales, mismo
-estado que la libreta de cobros. No requieren ningún cambio en
-`firestore.rules` ni en `firestore.indexes.json` (usan el Admin SDK, que
-ignora las Rules, y reutilizan el índice compuesto de `adminAuditLogs` ya
-desplegado). Hasta que se desplieguen, el botón "Eliminar cuenta
-definitivamente" del panel admin no va a funcionar.
 
 Para el detalle de qué se implementó en cada fase (arquitectura, archivos,
 tests), ver `docs/SAAS_ROADMAP.md`.
